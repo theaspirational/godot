@@ -32,7 +32,11 @@
 
 #include "Router.h"
 #include "clips_core/clips.h"
+#ifdef STOP
+#undef STOP
+#endif
 #include "core/object/ref_counted.h"
+#include "core/string/print_string.h"
 #include "scene/main/node.h"
 
 extern void godot_step_function(void *, DATA_OBJECT_PTR);

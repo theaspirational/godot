@@ -31,7 +31,11 @@
 #include <string>
 
 #include "clips_core/clips.h"
+#ifdef STOP
+#undef STOP
+#endif
 #include "core/object/object.h"
+#include "core/string/print_string.h"
 #include "factory.h"
 #include <memory>
 
@@ -64,7 +68,7 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 				print_line("clips_es:data_object_to_variant: Error in inst_name");
 				print_line(String(inst_name.c_str()));
 			}
-			value = ObjectDB::get_instance(std::stoi(inst_id_str));
+			value = ObjectDB::get_instance(ObjectID(std::stoi(inst_id_str)));
 			return value;
 		case SYMBOL:
 			if (strcmp(DOToString(clipsdo), "TRUE") == 0) {
@@ -84,7 +88,7 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 		case INSTANCE_ADDRESS:
 			instancePtr = DOToPointer(clipsdo);
 			EnvDirectGetSlot(env, instancePtr, "inst_id", &inst_id);
-			value = ObjectDB::get_instance(DOToLong(inst_id));
+			value = ObjectDB::get_instance(ObjectID(DOToLong(inst_id)));
 			return value;
 		case EXTERNAL_ADDRESS:
 			print_line("clips_es:data_object_to_variant: Detected EXTERNAL_ADDRESS");
@@ -141,13 +145,13 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 					case INSTANCE_NAME:
 						inst_name = ValueToString(GetMFValue(mfptr, iter));
 						inst_id_str = inst_name.substr(inst_name.find(delimiter) + 1);
-						value = ObjectDB::get_instance(std::stoi(inst_id_str));
+						value = ObjectDB::get_instance(ObjectID(std::stoi(inst_id_str)));
 						values.push_back(Variant(value));
 						break;
 					case INSTANCE_ADDRESS:
 						instancePtr = DOToPointer(clipsdo);
 						EnvDirectGetSlot(env, instancePtr, "inst_id", &inst_id);
-						value = ObjectDB::get_instance(DOToLong(inst_id));
+						value = ObjectDB::get_instance(ObjectID(DOToLong(inst_id)));
 						values.push_back(Variant(value));
 						break;
 					case EXTERNAL_ADDRESS:
@@ -195,7 +199,7 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 			} else {
 				SetpType(clipsdo, STRING_CLIPS);
 			}
-			p = EnvAddSymbol(env, String(value).ascii());
+			p = EnvAddSymbol(env, String(value).ascii().get_data());
 			SetpValue(clipsdo, p);
 			return clipsdo;
 		case Variant::Type::INT:
@@ -213,7 +217,7 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 			ref = value;
 			inst_name = ref->call("to_string");
 			inst_name = inst_name.lstrip("[").rstrip("]");
-			p = EnvAddSymbol(env, inst_name.ascii());
+			p = EnvAddSymbol(env, inst_name.ascii().get_data());
 			SetpValue(clipsdo, p);
 			return clipsdo;
 		case Variant::Type::NIL:
@@ -269,7 +273,7 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 						} else {
 							SetMFType(p, mfi, STRING_CLIPS);
 						}
-						p2 = EnvAddSymbol(env, String(values[iter]).ascii());
+						p2 = EnvAddSymbol(env, String(values[iter]).ascii().get_data());
 						SetMFValue(p, mfi, p2);
 						break;
 					case Variant::Type::INT:
@@ -292,7 +296,7 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 						ref = values[iter];
 						inst_name = ref->call("to_string");
 						inst_name = inst_name.lstrip("[").rstrip("]");
-						p2 = EnvAddSymbol(env, inst_name.ascii());
+						p2 = EnvAddSymbol(env, inst_name.ascii().get_data());
 						SetMFValue(p, mfi, p2);
 						break;
 					case Variant::Type::ARRAY:

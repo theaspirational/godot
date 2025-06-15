@@ -31,6 +31,9 @@
 #pragma once
 
 #include "clips_core/clips.h"
+#ifdef STOP
+#undef STOP
+#endif
 #include "core/variant/variant.h"
 
 Variant data_object_to_variant(void *, dataObject *);

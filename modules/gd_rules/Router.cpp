@@ -30,6 +30,9 @@
 
 #include "Router.h"
 #include "clips_core/clips.h"
+#ifdef STOP
+#undef STOP
+#endif
 
 #include "core/string/print_string.h"
 #include "core/string/ustring.h"
