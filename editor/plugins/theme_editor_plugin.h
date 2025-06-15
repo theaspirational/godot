@@ -1,50 +1,54 @@
-/*************************************************************************/
-/*  theme_editor_plugin.h                                                */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  theme_editor_plugin.h                                                 */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef THEME_EDITOR_PLUGIN_H
-#define THEME_EDITOR_PLUGIN_H
+#pragma once
 
-#include "editor/editor_plugin.h"
+#include "editor/plugins/editor_plugin.h"
 #include "editor/plugins/theme_editor_preview.h"
-#include "scene/gui/check_button.h"
 #include "scene/gui/dialogs.h"
-#include "scene/gui/item_list.h"
 #include "scene/gui/margin_container.h"
-#include "scene/gui/option_button.h"
-#include "scene/gui/scroll_container.h"
-#include "scene/gui/tab_bar.h"
-#include "scene/gui/texture_rect.h"
 #include "scene/gui/tree.h"
 #include "scene/resources/theme.h"
 
+class Button;
+class CheckButton;
 class EditorFileDialog;
+class ItemList;
+class Label;
+class LineEdit;
+class OptionButton;
+class PanelContainer;
+class TabBar;
+class TabContainer;
+class ThemeEditorPlugin;
+class TextureRect;
 
 class ThemeItemImportTree : public VBoxContainer {
 	GDCLASS(ThemeItemImportTree, VBoxContainer);
@@ -73,7 +77,7 @@ class ThemeItemImportTree : public VBoxContainer {
 		SELECT_IMPORT_FULL,
 	};
 
-	Map<ThemeItem, ItemCheckedState> selected_items;
+	RBMap<ThemeItem, ItemCheckedState> selected_items;
 
 	LineEdit *import_items_filter = nullptr;
 
@@ -198,6 +202,7 @@ class ThemeItemEditorDialog : public AcceptDialog {
 
 	Tree *edit_type_list = nullptr;
 	LineEdit *edit_add_type_value = nullptr;
+	Button *edit_add_type_button = nullptr;
 	String edited_item_type;
 
 	Button *edit_items_add_color = nullptr;
@@ -249,13 +254,14 @@ class ThemeItemEditorDialog : public AcceptDialog {
 	void _dialog_about_to_show();
 	void _update_edit_types();
 	void _edited_type_selected();
-	void _edited_type_button_pressed(Object *p_item, int p_column, int p_id);
+	void _edited_type_edited();
+	void _edited_type_button_pressed(Object *p_item, int p_column, int p_id, MouseButton p_button);
 
 	void _update_edit_item_tree(String p_item_type);
-	void _item_tree_button_pressed(Object *p_item, int p_column, int p_id);
+	void _item_tree_button_pressed(Object *p_item, int p_column, int p_id, MouseButton p_button);
 
-	void _add_theme_type(const String &p_new_text);
-	void _add_theme_item(Theme::DataType p_data_type, String p_item_name, String p_item_type);
+	void _add_theme_type();
+	void _add_theme_item(Theme::DataType p_data_type, const String &p_item_name, const String &p_item_type);
 	void _remove_theme_type(const String &p_theme_type);
 	void _remove_data_type_items(Theme::DataType p_data_type, String p_item_type);
 	void _remove_class_items();
@@ -298,6 +304,7 @@ class ThemeTypeDialog : public ConfirmationDialog {
 	void _update_add_type_options(const String &p_filter = "");
 
 	void _add_type_filter_cbk(const String &p_value);
+	void _type_filter_input(const Ref<InputEvent> &p_event);
 	void _add_type_options_cbk(int p_index);
 	void _add_type_dialog_entered(const String &p_value);
 	void _add_type_dialog_activated(int p_index);
@@ -314,6 +321,11 @@ public:
 	void set_include_own_types(bool p_enable);
 
 	ThemeTypeDialog();
+};
+
+// Custom `Label` needed to use `EditorHelpBit` to display theme item documentation.
+class ThemeItemLabel : public Label {
+	virtual Control *make_custom_tooltip(const String &p_text) const;
 };
 
 class ThemeTypeEditor : public MarginContainer {
@@ -334,6 +346,10 @@ class ThemeTypeEditor : public MarginContainer {
 
 	OptionButton *theme_type_list = nullptr;
 	Button *add_type_button = nullptr;
+	Button *rename_type_button = nullptr;
+	ConfirmationDialog *theme_type_rename_dialog = nullptr;
+	LineEdit *theme_type_rename_line_edit = nullptr;
+	Button *remove_type_button = nullptr;
 
 	CheckButton *show_default_items_button = nullptr;
 
@@ -363,15 +379,19 @@ class ThemeTypeEditor : public MarginContainer {
 	VBoxContainer *_create_item_list(Theme::DataType p_data_type);
 	void _update_type_list();
 	void _update_type_list_debounced();
-	OrderedHashMap<StringName, bool> _get_type_items(String p_type_name, void (Theme::*get_list_func)(StringName, List<StringName> *) const, bool include_default);
+	HashMap<StringName, bool> _get_type_items(String p_type_name, Theme::DataType p_type, bool p_include_default);
 	HBoxContainer *_create_property_control(Theme::DataType p_data_type, String p_item_name, bool p_editable);
 	void _add_focusable(Control *p_control);
 	void _update_type_items();
 
 	void _list_type_selected(int p_index);
 	void _add_type_button_cbk();
+	void _rename_type_button_cbk();
+	void _theme_type_rename_dialog_confirmed();
+	void _remove_type_button_cbk();
 	void _add_default_type_items();
 
+	void _update_add_button(const String &p_text, LineEdit *p_for_edit);
 	void _item_add_cbk(int p_data_type, Control *p_control);
 	void _item_add_lineedit_cbk(String p_value, int p_data_type, Control *p_control);
 	void _item_override_cbk(int p_data_type, String p_item_name);
@@ -384,7 +404,7 @@ class ThemeTypeEditor : public MarginContainer {
 	void _color_item_changed(Color p_value, String p_item_name);
 	void _constant_item_changed(float p_value, String p_item_name);
 	void _font_size_item_changed(float p_value, String p_item_name);
-	void _edit_resource_item(RES p_resource, bool p_edit);
+	void _edit_resource_item(Ref<Resource> p_resource, bool p_edit);
 	void _font_item_changed(Ref<Font> p_value, String p_item_name);
 	void _icon_item_changed(Ref<Texture2D> p_value, String p_item_name);
 	void _stylebox_item_changed(Ref<StyleBox> p_value, String p_item_name);
@@ -415,6 +435,9 @@ public:
 class ThemeEditor : public VBoxContainer {
 	GDCLASS(ThemeEditor, VBoxContainer);
 
+	friend class ThemeEditorPlugin;
+	ThemeEditorPlugin *plugin = nullptr;
+
 	Ref<Theme> theme;
 
 	TabBar *preview_tabs = nullptr;
@@ -429,6 +452,8 @@ class ThemeEditor : public VBoxContainer {
 
 	void _theme_save_button_cbk(bool p_save_as);
 	void _theme_edit_button_cbk();
+	void _theme_close_button_cbk();
+	void _scene_closed(const String &p_path);
 
 	void _add_preview_button_cbk();
 	void _preview_scene_dialog_cbk(const String &p_path);
@@ -446,6 +471,9 @@ public:
 	void edit(const Ref<Theme> &p_theme);
 	Ref<Theme> get_edited_theme();
 
+	bool can_drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from);
+	void drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from);
+
 	ThemeEditor();
 };
 
@@ -456,13 +484,12 @@ class ThemeEditorPlugin : public EditorPlugin {
 	Button *button = nullptr;
 
 public:
-	virtual String get_name() const override { return "Theme"; }
+	virtual String get_plugin_name() const override { return "Theme"; }
 	bool has_main_screen() const override { return false; }
-	virtual void edit(Object *p_node) override;
-	virtual bool handles(Object *p_node) const override;
+	virtual void edit(Object *p_object) override;
+	virtual bool handles(Object *p_object) const override;
 	virtual void make_visible(bool p_visible) override;
+	virtual bool can_auto_hide() const override;
 
 	ThemeEditorPlugin();
 };
-
-#endif // THEME_EDITOR_PLUGIN_H

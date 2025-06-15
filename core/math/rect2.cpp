@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  rect2.cpp                                                            */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  rect2.cpp                                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "rect2.h"
 
@@ -36,6 +36,14 @@
 
 bool Rect2::is_equal_approx(const Rect2 &p_rect) const {
 	return position.is_equal_approx(p_rect.position) && size.is_equal_approx(p_rect.size);
+}
+
+bool Rect2::is_same(const Rect2 &p_rect) const {
+	return position.is_same(p_rect.position) && size.is_same(p_rect.size);
+}
+
+bool Rect2::is_finite() const {
+	return position.is_finite() && size.is_finite();
 }
 
 bool Rect2::intersects_segment(const Point2 &p_from, const Point2 &p_to, Point2 *r_pos, Point2 *r_normal) const {
@@ -201,33 +209,33 @@ next4:
 		Vector2(position.x + size.x, position.y + size.y),
 	};
 
-	real_t maxa = p_xform.elements[0].dot(xf_points2[0]);
+	real_t maxa = p_xform.columns[0].dot(xf_points2[0]);
 	real_t mina = maxa;
 
-	real_t dp = p_xform.elements[0].dot(xf_points2[1]);
+	real_t dp = p_xform.columns[0].dot(xf_points2[1]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	dp = p_xform.elements[0].dot(xf_points2[2]);
+	dp = p_xform.columns[0].dot(xf_points2[2]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	dp = p_xform.elements[0].dot(xf_points2[3]);
+	dp = p_xform.columns[0].dot(xf_points2[3]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	real_t maxb = p_xform.elements[0].dot(xf_points[0]);
+	real_t maxb = p_xform.columns[0].dot(xf_points[0]);
 	real_t minb = maxb;
 
-	dp = p_xform.elements[0].dot(xf_points[1]);
+	dp = p_xform.columns[0].dot(xf_points[1]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
-	dp = p_xform.elements[0].dot(xf_points[2]);
+	dp = p_xform.columns[0].dot(xf_points[2]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
-	dp = p_xform.elements[0].dot(xf_points[3]);
+	dp = p_xform.columns[0].dot(xf_points[3]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
@@ -238,33 +246,33 @@ next4:
 		return false;
 	}
 
-	maxa = p_xform.elements[1].dot(xf_points2[0]);
+	maxa = p_xform.columns[1].dot(xf_points2[0]);
 	mina = maxa;
 
-	dp = p_xform.elements[1].dot(xf_points2[1]);
+	dp = p_xform.columns[1].dot(xf_points2[1]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	dp = p_xform.elements[1].dot(xf_points2[2]);
+	dp = p_xform.columns[1].dot(xf_points2[2]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	dp = p_xform.elements[1].dot(xf_points2[3]);
+	dp = p_xform.columns[1].dot(xf_points2[3]);
 	maxa = MAX(dp, maxa);
 	mina = MIN(dp, mina);
 
-	maxb = p_xform.elements[1].dot(xf_points[0]);
+	maxb = p_xform.columns[1].dot(xf_points[0]);
 	minb = maxb;
 
-	dp = p_xform.elements[1].dot(xf_points[1]);
+	dp = p_xform.columns[1].dot(xf_points[1]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
-	dp = p_xform.elements[1].dot(xf_points[2]);
+	dp = p_xform.columns[1].dot(xf_points[2]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
-	dp = p_xform.elements[1].dot(xf_points[3]);
+	dp = p_xform.columns[1].dot(xf_points[3]);
 	maxb = MAX(dp, maxb);
 	minb = MIN(dp, minb);
 
@@ -279,7 +287,7 @@ next4:
 }
 
 Rect2::operator String() const {
-	return "[P: " + position.operator String() + ", S: " + size + "]";
+	return "[P: " + position.operator String() + ", S: " + size.operator String() + "]";
 }
 
 Rect2::operator Rect2i() const {

@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  remote_debugger.cpp                                                  */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  remote_debugger.cpp                                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "remote_debugger.h"
 
@@ -36,91 +36,11 @@
 #include "core/debugger/engine_profiler.h"
 #include "core/debugger/script_debugger.h"
 #include "core/input/input.h"
+#include "core/io/resource_loader.h"
+#include "core/math/expression.h"
 #include "core/object/script_language.h"
 #include "core/os/os.h"
-
-class RemoteDebugger::MultiplayerProfiler : public EngineProfiler {
-	struct BandwidthFrame {
-		uint32_t timestamp;
-		int packet_size;
-	};
-
-	int bandwidth_in_ptr = 0;
-	Vector<BandwidthFrame> bandwidth_in;
-	int bandwidth_out_ptr = 0;
-	Vector<BandwidthFrame> bandwidth_out;
-	uint64_t last_bandwidth_time = 0;
-
-	int bandwidth_usage(const Vector<BandwidthFrame> &p_buffer, int p_pointer) {
-		ERR_FAIL_COND_V(p_buffer.size() == 0, 0);
-		int total_bandwidth = 0;
-
-		uint64_t timestamp = OS::get_singleton()->get_ticks_msec();
-		uint64_t final_timestamp = timestamp - 1000;
-
-		int i = (p_pointer + p_buffer.size() - 1) % p_buffer.size();
-
-		while (i != p_pointer && p_buffer[i].packet_size > 0) {
-			if (p_buffer[i].timestamp < final_timestamp) {
-				return total_bandwidth;
-			}
-			total_bandwidth += p_buffer[i].packet_size;
-			i = (i + p_buffer.size() - 1) % p_buffer.size();
-		}
-
-		ERR_FAIL_COND_V_MSG(i == p_pointer, total_bandwidth, "Reached the end of the bandwidth profiler buffer, values might be inaccurate.");
-		return total_bandwidth;
-	}
-
-public:
-	void toggle(bool p_enable, const Array &p_opts) {
-		if (!p_enable) {
-			bandwidth_in.clear();
-			bandwidth_out.clear();
-		} else {
-			bandwidth_in_ptr = 0;
-			bandwidth_in.resize(16384); // ~128kB
-			for (int i = 0; i < bandwidth_in.size(); ++i) {
-				bandwidth_in.write[i].packet_size = -1;
-			}
-			bandwidth_out_ptr = 0;
-			bandwidth_out.resize(16384); // ~128kB
-			for (int i = 0; i < bandwidth_out.size(); ++i) {
-				bandwidth_out.write[i].packet_size = -1;
-			}
-		}
-	}
-
-	void add(const Array &p_data) {
-		ERR_FAIL_COND(p_data.size() < 3);
-		const String inout = p_data[0];
-		int time = p_data[1];
-		int size = p_data[2];
-		if (inout == "in") {
-			bandwidth_in.write[bandwidth_in_ptr].timestamp = time;
-			bandwidth_in.write[bandwidth_in_ptr].packet_size = size;
-			bandwidth_in_ptr = (bandwidth_in_ptr + 1) % bandwidth_in.size();
-		} else if (inout == "out") {
-			bandwidth_out.write[bandwidth_out_ptr].timestamp = time;
-			bandwidth_out.write[bandwidth_out_ptr].packet_size = size;
-			bandwidth_out_ptr = (bandwidth_out_ptr + 1) % bandwidth_out.size();
-		}
-	}
-
-	void tick(double p_frame_time, double p_idle_time, double p_physics_time, double p_physics_frame_time) {
-		uint64_t pt = OS::get_singleton()->get_ticks_msec();
-		if (pt - last_bandwidth_time > 200) {
-			last_bandwidth_time = pt;
-			int incoming_bandwidth = bandwidth_usage(bandwidth_in, bandwidth_in_ptr);
-			int outgoing_bandwidth = bandwidth_usage(bandwidth_out, bandwidth_out_ptr);
-
-			Array arr;
-			arr.push_back(incoming_bandwidth);
-			arr.push_back(outgoing_bandwidth);
-			EngineDebugger::get_singleton()->send_message("multiplayer:bandwidth", arr);
-		}
-	}
-};
+#include "servers/display_server.h"
 
 class RemoteDebugger::PerformanceProfiler : public EngineProfiler {
 	Object *performance = nullptr;
@@ -130,7 +50,7 @@ class RemoteDebugger::PerformanceProfiler : public EngineProfiler {
 public:
 	void toggle(bool p_enable, const Array &p_opts) {}
 	void add(const Array &p_data) {}
-	void tick(double p_frame_time, double p_idle_time, double p_physics_time, double p_physics_frame_time) {
+	void tick(double p_frame_time, double p_process_time, double p_physics_time, double p_physics_frame_time) {
 		if (!performance) {
 			return;
 		}
@@ -159,7 +79,7 @@ public:
 		for (int i = 0; i < custom_monitor_names.size(); i++) {
 			Variant monitor_value = performance->call("get_custom_monitor", custom_monitor_names[i]);
 			if (!monitor_value.is_num()) {
-				ERR_PRINT("Value of custom monitor '" + String(custom_monitor_names[i]) + "' is not a number");
+				ERR_PRINT(vformat("Value of custom monitor '%s' is not a number.", String(custom_monitor_names[i])));
 				arr[i + max] = Variant();
 			} else {
 				arr[i + max] = monitor_value;
@@ -169,15 +89,13 @@ public:
 		EngineDebugger::get_singleton()->send_message("performance:profile_frame", arr);
 	}
 
-	PerformanceProfiler(Object *p_performance) {
+	explicit PerformanceProfiler(Object *p_performance) {
 		performance = p_performance;
 	}
 };
 
-Error RemoteDebugger::_put_msg(String p_message, Array p_data) {
-	Array msg;
-	msg.push_back(p_message);
-	msg.push_back(p_data);
+Error RemoteDebugger::_put_msg(const String &p_message, const Array &p_data) {
+	Array msg = { p_message, Thread::get_caller_id(), p_data };
 	Error err = peer->put_message(msg);
 	if (err != OK) {
 		n_messages_dropped++;
@@ -208,7 +126,7 @@ void RemoteDebugger::_err_handler(void *p_this, const char *p_func, const char *
 	rd->script_debugger->send_error(String::utf8(p_func), String::utf8(p_file), p_line, String::utf8(p_err), String::utf8(p_descr), p_editor_notify, p_type, si);
 }
 
-void RemoteDebugger::_print_handler(void *p_this, const String &p_string, bool p_error) {
+void RemoteDebugger::_print_handler(void *p_this, const String &p_string, bool p_error, bool p_rich) {
 	RemoteDebugger *rd = static_cast<RemoteDebugger *>(p_this);
 
 	if (rd->flushing && Thread::get_caller_id() == rd->flush_thread) { // Can't handle recursive prints during flush.
@@ -237,7 +155,13 @@ void RemoteDebugger::_print_handler(void *p_this, const String &p_string, bool p
 
 		OutputString output_string;
 		output_string.message = s;
-		output_string.type = p_error ? MESSAGE_TYPE_ERROR : MESSAGE_TYPE_LOG;
+		if (p_error) {
+			output_string.type = MESSAGE_TYPE_ERROR;
+		} else if (p_rich) {
+			output_string.type = MESSAGE_TYPE_LOG_RICH;
+		} else {
+			output_string.type = MESSAGE_TYPE_LOG;
+		}
 		rd->output_strings.push_back(output_string);
 
 		if (overflowed) {
@@ -262,9 +186,9 @@ RemoteDebugger::ErrorMessage RemoteDebugger::_create_overflow_error(const String
 }
 
 void RemoteDebugger::flush_output() {
+	MutexLock lock(mutex);
 	flush_thread = Thread::get_caller_id();
 	flushing = true;
-	MutexLock lock(mutex);
 	if (!is_peer_connected()) {
 		return;
 	}
@@ -281,8 +205,7 @@ void RemoteDebugger::flush_output() {
 		Vector<String> joined_log_strings;
 		Vector<String> strings;
 		Vector<int> types;
-		for (int i = 0; i < output_strings.size(); i++) {
-			const OutputString &output_string = output_strings[i];
+		for (const OutputString &output_string : output_strings) {
 			if (output_string.type == MESSAGE_TYPE_ERROR) {
 				if (!joined_log_strings.is_empty()) {
 					strings.push_back(String("\n").join(joined_log_strings));
@@ -291,6 +214,14 @@ void RemoteDebugger::flush_output() {
 				}
 				strings.push_back(output_string.message);
 				types.push_back(MESSAGE_TYPE_ERROR);
+			} else if (output_string.type == MESSAGE_TYPE_LOG_RICH) {
+				if (!joined_log_strings.is_empty()) {
+					strings.push_back(String("\n").join(joined_log_strings));
+					types.push_back(MESSAGE_TYPE_LOG_RICH);
+					joined_log_strings.clear();
+				}
+				strings.push_back(output_string.message);
+				types.push_back(MESSAGE_TYPE_LOG_RICH);
 			} else {
 				joined_log_strings.push_back(output_string.message);
 			}
@@ -301,9 +232,7 @@ void RemoteDebugger::flush_output() {
 			types.push_back(MESSAGE_TYPE_LOG);
 		}
 
-		Array arr;
-		arr.push_back(strings);
-		arr.push_back(types);
+		Array arr = { strings, types };
 		_put_msg("output", arr);
 		output_strings.clear();
 	}
@@ -404,7 +333,7 @@ void RemoteDebugger::_send_stack_vars(List<String> &p_names, List<Variant> &p_va
 }
 
 Error RemoteDebugger::_try_capture(const String &p_msg, const Array &p_data, bool &r_captured) {
-	const int idx = p_msg.find(":");
+	const int idx = p_msg.find_char(':');
 	r_captured = false;
 	if (idx < 0) { // No prefix, unknown message.
 		return OK;
@@ -417,40 +346,107 @@ Error RemoteDebugger::_try_capture(const String &p_msg, const Array &p_data, boo
 	return capture_parse(cap, msg, p_data, r_captured);
 }
 
+void RemoteDebugger::_poll_messages() {
+	MutexLock mutex_lock(mutex);
+
+	peer->poll();
+	while (peer->has_message()) {
+		Array cmd = peer->get_message();
+		ERR_CONTINUE(cmd.size() != 3);
+		ERR_CONTINUE(cmd[0].get_type() != Variant::STRING);
+		ERR_CONTINUE(cmd[1].get_type() != Variant::INT);
+		ERR_CONTINUE(cmd[2].get_type() != Variant::ARRAY);
+
+		Thread::ID thread = cmd[1];
+
+		if (!messages.has(thread)) {
+			continue; // This thread is not around to receive the messages
+		}
+
+		Message msg;
+		msg.message = cmd[0];
+		msg.data = cmd[2];
+		messages[thread].push_back(msg);
+	}
+}
+
+bool RemoteDebugger::_has_messages() {
+	MutexLock mutex_lock(mutex);
+	return messages.has(Thread::get_caller_id()) && !messages[Thread::get_caller_id()].is_empty();
+}
+
+Array RemoteDebugger::_get_message() {
+	MutexLock mutex_lock(mutex);
+	ERR_FAIL_COND_V(!messages.has(Thread::get_caller_id()), Array());
+	List<Message> &message_list = messages[Thread::get_caller_id()];
+	ERR_FAIL_COND_V(message_list.is_empty(), Array());
+
+	Array msg;
+	msg.resize(2);
+	msg[0] = message_list.front()->get().message;
+	msg[1] = message_list.front()->get().data;
+	message_list.pop_front();
+	return msg;
+}
+
 void RemoteDebugger::debug(bool p_can_continue, bool p_is_error_breakpoint) {
 	//this function is called when there is a debugger break (bug on script)
 	//or when execution is paused from editor
 
-	if (script_debugger->is_skipping_breakpoints() && !p_is_error_breakpoint) {
-		return;
-	}
+	{
+		MutexLock lock(mutex);
+		// Tests that require mutex.
+		if (script_debugger->is_skipping_breakpoints() && !p_is_error_breakpoint) {
+			return;
+		}
 
-	ERR_FAIL_COND_MSG(!is_peer_connected(), "Script Debugger failed to connect, but being used anyway.");
+		ERR_FAIL_COND_MSG(!is_peer_connected(), "Script Debugger failed to connect, but being used anyway.");
 
-	if (!peer->can_block()) {
-		return; // Peer does not support blocking IO. We could at least send the error though.
+		if (!peer->can_block()) {
+			return; // Peer does not support blocking IO. We could at least send the error though.
+		}
 	}
 
 	ScriptLanguage *script_lang = script_debugger->get_break_language();
+	ERR_FAIL_NULL(script_lang);
+	const bool can_break = !(p_is_error_breakpoint && script_debugger->is_ignoring_error_breaks());
 	const String error_str = script_lang ? script_lang->debug_get_error() : "";
-	Array msg;
-	msg.push_back(p_can_continue);
-	msg.push_back(error_str);
-	ERR_FAIL_COND(!script_lang);
-	msg.push_back(script_lang->debug_get_stack_level_count() > 0);
-	send_message("debug_enter", msg);
 
-	Input::MouseMode mouse_mode = Input::get_singleton()->get_mouse_mode();
-	if (mouse_mode != Input::MOUSE_MODE_VISIBLE) {
-		Input::get_singleton()->set_mouse_mode(Input::MOUSE_MODE_VISIBLE);
+	if (can_break) {
+		Array msg = {
+			p_can_continue,
+			error_str,
+			script_lang->debug_get_stack_level_count() > 0,
+			Thread::get_caller_id()
+		};
+		if (allow_focus_steal_fn) {
+			allow_focus_steal_fn();
+		}
+		send_message("debug_enter", msg);
+	} else {
+		ERR_PRINT(error_str);
+		return;
+	}
+
+	Input::MouseMode mouse_mode = Input::MOUSE_MODE_VISIBLE;
+
+	if (Thread::get_caller_id() == Thread::get_main_id()) {
+		mouse_mode = Input::get_singleton()->get_mouse_mode();
+		if (mouse_mode != Input::MOUSE_MODE_VISIBLE) {
+			Input::get_singleton()->set_mouse_mode(Input::MOUSE_MODE_VISIBLE);
+		}
+	} else {
+		MutexLock mutex_lock(mutex);
+		messages.insert(Thread::get_caller_id(), List<Message>());
 	}
 
 	while (is_peer_connected()) {
 		flush_output();
-		peer->poll();
 
-		if (peer->has_message()) {
-			Array cmd = peer->get_message();
+		_poll_messages();
+
+		if (_has_messages()) {
+			Array cmd = _get_message();
 
 			ERR_CONTINUE(cmd.size() != 2);
 			ERR_CONTINUE(cmd[0].get_type() != Variant::STRING);
@@ -492,7 +488,7 @@ void RemoteDebugger::debug(bool p_can_continue, bool p_is_error_breakpoint) {
 
 			} else if (command == "get_stack_frame_vars") {
 				ERR_FAIL_COND(data.size() != 1);
-				ERR_FAIL_COND(!script_lang);
+				ERR_FAIL_NULL(script_lang);
 				int lv = data[0];
 
 				List<String> members;
@@ -514,16 +510,16 @@ void RemoteDebugger::debug(bool p_can_continue, bool p_is_error_breakpoint) {
 				script_lang->debug_get_globals(&globals, &globals_vals);
 				ERR_FAIL_COND(globals.size() != globals_vals.size());
 
-				Array var_size;
-				var_size.push_back(local_vals.size() + member_vals.size() + globals_vals.size());
+				Array var_size = { local_vals.size() + member_vals.size() + globals_vals.size() };
 				send_message("stack_frame_vars", var_size);
 				_send_stack_vars(locals, local_vals, 0);
 				_send_stack_vars(members, member_vals, 1);
 				_send_stack_vars(globals, globals_vals, 2);
 
 			} else if (command == "reload_scripts") {
+				script_paths_to_reload = data;
+			} else if (command == "reload_all_scripts") {
 				reload_all_scripts = true;
-
 			} else if (command == "breakpoint") {
 				ERR_FAIL_COND(data.size() < 3);
 				bool set = data[2];
@@ -534,25 +530,106 @@ void RemoteDebugger::debug(bool p_can_continue, bool p_is_error_breakpoint) {
 				}
 
 			} else if (command == "set_skip_breakpoints") {
-				ERR_FAIL_COND(data.size() < 1);
+				ERR_FAIL_COND(data.is_empty());
 				script_debugger->set_skip_breakpoints(data[0]);
+			} else if (command == "set_ignore_error_breaks") {
+				ERR_FAIL_COND(data.is_empty());
+				script_debugger->set_ignore_error_breaks(data[0]);
+			} else if (command == "evaluate") {
+				String expression_str = data[0];
+				int frame = data[1];
+
+				ScriptInstance *breaked_instance = script_debugger->get_break_language()->debug_get_stack_level_instance(frame);
+				if (!breaked_instance) {
+					break;
+				}
+
+				PackedStringArray input_names;
+				Array input_vals;
+
+				List<String> locals;
+				List<Variant> local_vals;
+				script_debugger->get_break_language()->debug_get_stack_level_locals(frame, &locals, &local_vals);
+				ERR_FAIL_COND(locals.size() != local_vals.size());
+
+				for (const String &S : locals) {
+					input_names.append(S);
+				}
+
+				for (const Variant &V : local_vals) {
+					input_vals.append(V);
+				}
+
+				List<String> globals;
+				List<Variant> globals_vals;
+				script_debugger->get_break_language()->debug_get_globals(&globals, &globals_vals);
+				ERR_FAIL_COND(globals.size() != globals_vals.size());
+
+				for (const String &S : globals) {
+					input_names.append(S);
+				}
+
+				for (const Variant &V : globals_vals) {
+					input_vals.append(V);
+				}
+
+				List<StringName> native_types;
+				ClassDB::get_class_list(&native_types);
+				for (const StringName &E : native_types) {
+					if (!ClassDB::is_class_exposed(E) || !Engine::get_singleton()->has_singleton(E) || Engine::get_singleton()->is_singleton_editor_only(E)) {
+						continue;
+					}
+
+					input_names.append(E);
+					input_vals.append(Engine::get_singleton()->get_singleton_object(E));
+				}
+
+				List<StringName> user_types;
+				ScriptServer::get_global_class_list(&user_types);
+				for (const StringName &S : user_types) {
+					String scr_path = ScriptServer::get_global_class_path(S);
+					Ref<Script> scr = ResourceLoader::load(scr_path, "Script");
+					ERR_CONTINUE_MSG(scr.is_null(), vformat(R"(Could not load the global class %s from resource path: "%s".)", S, scr_path));
+
+					input_names.append(S);
+					input_vals.append(scr);
+				}
+
+				Expression expression;
+				expression.parse(expression_str, input_names);
+				const Variant return_val = expression.execute(input_vals, breaked_instance->get_owner());
+
+				DebuggerMarshalls::ScriptStackVariable stvar;
+				stvar.name = expression_str;
+				stvar.value = return_val;
+				stvar.type = 3;
+
+				send_message("evaluation_return", stvar.serialize());
 			} else {
 				bool captured = false;
 				ERR_CONTINUE(_try_capture(command, data, captured) != OK);
 				if (!captured) {
-					WARN_PRINT("Unknown message received from debugger: " + command);
+					WARN_PRINT(vformat("Unknown message received from debugger: %s.", command));
 				}
 			}
 		} else {
 			OS::get_singleton()->delay_usec(10000);
-			OS::get_singleton()->process_and_drop_events();
+			if (Thread::get_caller_id() == Thread::get_main_id()) {
+				// If this is a busy loop on the main thread, events still need to be processed.
+				DisplayServer::get_singleton()->force_process_and_drop_events();
+			}
 		}
 	}
 
 	send_message("debug_exit", Array());
 
-	if (mouse_mode != Input::MOUSE_MODE_VISIBLE) {
-		Input::get_singleton()->set_mouse_mode(mouse_mode);
+	if (Thread::get_caller_id() == Thread::get_main_id()) {
+		if (mouse_mode != Input::MOUSE_MODE_VISIBLE) {
+			Input::get_singleton()->set_mouse_mode(mouse_mode);
+		}
+	} else {
+		MutexLock mutex_lock(mutex);
+		messages.erase(Thread::get_caller_id());
 	}
 }
 
@@ -562,16 +639,18 @@ void RemoteDebugger::poll_events(bool p_is_idle) {
 	}
 
 	flush_output();
-	peer->poll();
-	while (peer->has_message()) {
-		Array arr = peer->get_message();
+
+	_poll_messages();
+
+	while (_has_messages()) {
+		Array arr = _get_message();
 
 		ERR_CONTINUE(arr.size() != 2);
 		ERR_CONTINUE(arr[0].get_type() != Variant::STRING);
 		ERR_CONTINUE(arr[1].get_type() != Variant::ARRAY);
 
 		const String cmd = arr[0];
-		const int idx = cmd.find(":");
+		const int idx = cmd.find_char(':');
 		bool parsed = false;
 		if (idx < 0) { // Not prefix, use scripts capture.
 			capture_parse("core", cmd, arr[1], parsed);
@@ -588,19 +667,36 @@ void RemoteDebugger::poll_events(bool p_is_idle) {
 	}
 
 	// Reload scripts during idle poll only.
-	if (p_is_idle && reload_all_scripts) {
-		for (int i = 0; i < ScriptServer::get_language_count(); i++) {
-			ScriptServer::get_language(i)->reload_all_scripts();
+	if (p_is_idle) {
+		if (reload_all_scripts) {
+			for (int i = 0; i < ScriptServer::get_language_count(); i++) {
+				ScriptServer::get_language(i)->reload_all_scripts();
+			}
+			reload_all_scripts = false;
+		} else if (!script_paths_to_reload.is_empty()) {
+			Array scripts_to_reload;
+			for (int i = 0; i < script_paths_to_reload.size(); ++i) {
+				String path = script_paths_to_reload[i];
+				Error err = OK;
+				Ref<Script> script = ResourceLoader::load(path, "", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+				ERR_CONTINUE_MSG(err != OK, vformat("Could not reload script '%s': %s", path, error_names[err]));
+				ERR_CONTINUE_MSG(script.is_null(), vformat("Could not reload script '%s': Not a script!", path, error_names[err]));
+				scripts_to_reload.push_back(script);
+			}
+			for (int i = 0; i < ScriptServer::get_language_count(); i++) {
+				ScriptServer::get_language(i)->reload_scripts(scripts_to_reload, true);
+			}
 		}
-		reload_all_scripts = false;
+		script_paths_to_reload.clear();
 	}
 }
 
 Error RemoteDebugger::_core_capture(const String &p_cmd, const Array &p_data, bool &r_captured) {
 	r_captured = true;
 	if (p_cmd == "reload_scripts") {
+		script_paths_to_reload = p_data;
+	} else if (p_cmd == "reload_all_scripts") {
 		reload_all_scripts = true;
-
 	} else if (p_cmd == "breakpoint") {
 		ERR_FAIL_COND_V(p_data.size() < 3, ERR_INVALID_DATA);
 		bool set = p_data[2];
@@ -611,8 +707,11 @@ Error RemoteDebugger::_core_capture(const String &p_cmd, const Array &p_data, bo
 		}
 
 	} else if (p_cmd == "set_skip_breakpoints") {
-		ERR_FAIL_COND_V(p_data.size() < 1, ERR_INVALID_DATA);
+		ERR_FAIL_COND_V(p_data.is_empty(), ERR_INVALID_DATA);
 		script_debugger->set_skip_breakpoints(p_data[0]);
+	} else if (p_cmd == "set_ignore_error_breaks") {
+		ERR_FAIL_COND_V(p_data.is_empty(), ERR_INVALID_DATA);
+		script_debugger->set_ignore_error_breaks(p_data[0]);
 	} else if (p_cmd == "break") {
 		script_debugger->debug(script_debugger->get_break_language());
 	} else {
@@ -623,7 +722,7 @@ Error RemoteDebugger::_core_capture(const String &p_cmd, const Array &p_data, bo
 
 Error RemoteDebugger::_profiler_capture(const String &p_cmd, const Array &p_data, bool &r_captured) {
 	r_captured = false;
-	ERR_FAIL_COND_V(p_data.size() < 1, ERR_INVALID_DATA);
+	ERR_FAIL_COND_V(p_data.is_empty(), ERR_INVALID_DATA);
 	ERR_FAIL_COND_V(p_data[0].get_type() != Variant::BOOL, ERR_INVALID_DATA);
 	ERR_FAIL_COND_V(!has_profiler(p_cmd), ERR_UNAVAILABLE);
 	Array opts;
@@ -642,14 +741,10 @@ RemoteDebugger::RemoteDebugger(Ref<RemoteDebuggerPeer> p_peer) {
 	max_errors_per_second = GLOBAL_GET("network/limits/debugger/max_errors_per_second");
 	max_warnings_per_second = GLOBAL_GET("network/limits/debugger/max_warnings_per_second");
 
-	// Multiplayer Profiler
-	multiplayer_profiler.instantiate();
-	multiplayer_profiler->bind("multiplayer");
-
 	// Performance Profiler
 	Object *perf = Engine::get_singleton()->get_singleton_object("Performance");
 	if (perf) {
-		performance_profiler = Ref<PerformanceProfiler>(memnew(PerformanceProfiler(perf)));
+		performance_profiler.instantiate(perf);
 		performance_profiler->bind("performance");
 		profiler_enable("performance", true);
 	}
@@ -674,6 +769,8 @@ RemoteDebugger::RemoteDebugger(Ref<RemoteDebuggerPeer> p_peer) {
 	eh.errfunc = _err_handler;
 	eh.userdata = this;
 	add_error_handler(&eh);
+
+	messages.insert(Thread::get_main_id(), List<Message>());
 }
 
 RemoteDebugger::~RemoteDebugger() {

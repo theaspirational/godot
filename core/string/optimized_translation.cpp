@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  optimized_translation.cpp                                            */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  optimized_translation.cpp                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "optimized_translation.h"
 
@@ -37,9 +37,9 @@ extern "C" {
 }
 
 struct CompressedString {
-	int orig_len;
+	int orig_len = 0;
 	CharString compressed;
-	int offset;
+	int offset = 0;
 };
 
 void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
@@ -53,7 +53,7 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 	int size = Math::larger_prime(keys.size());
 
 	Vector<Vector<Pair<int, CharString>>> buckets;
-	Vector<Map<uint32_t, int>> table;
+	Vector<HashMap<uint32_t, int>> table;
 	Vector<uint32_t> hfunc_table;
 	Vector<CompressedString> compressed;
 
@@ -82,20 +82,20 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 
 		if (ps.orig_len != 0) {
 			CharString dst_s;
-			dst_s.resize(src_s.size());
+			dst_s.resize_uninitialized(src_s.size());
 			int ret = smaz_compress(src_s.get_data(), src_s.size(), dst_s.ptrw(), src_s.size());
 			if (ret >= src_s.size()) {
 				//if compressed is larger than original, just use original
 				ps.orig_len = src_s.size();
 				ps.compressed = src_s;
 			} else {
-				dst_s.resize(ret);
+				dst_s.resize_uninitialized(ret);
 				//ps.orig_len=;
 				ps.compressed = dst_s;
 			}
 		} else {
 			ps.orig_len = 1;
-			ps.compressed.resize(1);
+			ps.compressed.resize_uninitialized(1);
 			ps.compressed[0] = 0;
 		}
 
@@ -108,9 +108,9 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 
 	for (int i = 0; i < size; i++) {
 		const Vector<Pair<int, CharString>> &b = buckets[i];
-		Map<uint32_t, int> &t = table.write[i];
+		HashMap<uint32_t, int> &t = table.write[i];
 
-		if (b.size() == 0) {
+		if (b.is_empty()) {
 			continue;
 		}
 
@@ -147,8 +147,8 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 	int btindex = 0;
 
 	for (int i = 0; i < size; i++) {
-		const Map<uint32_t, int> &t = table[i];
-		if (t.size() == 0) {
+		const HashMap<uint32_t, int> &t = table[i];
+		if (t.is_empty()) {
 			htw[i] = 0xFFFFFFFF; //nothing
 			continue;
 		}
@@ -179,14 +179,14 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 }
 
 bool OptimizedTranslation::_set(const StringName &p_name, const Variant &p_value) {
-	String name = p_name.operator String();
-	if (name == "hash_table") {
+	String prop_name = p_name.operator String();
+	if (prop_name == "hash_table") {
 		hash_table = p_value;
-	} else if (name == "bucket_table") {
+	} else if (prop_name == "bucket_table") {
 		bucket_table = p_value;
-	} else if (name == "strings") {
+	} else if (prop_name == "strings") {
 		strings = p_value;
-	} else if (name == "load_from") {
+	} else if (prop_name == "load_from") {
 		generate(p_value);
 	} else {
 		return false;
@@ -196,12 +196,12 @@ bool OptimizedTranslation::_set(const StringName &p_name, const Variant &p_value
 }
 
 bool OptimizedTranslation::_get(const StringName &p_name, Variant &r_ret) const {
-	String name = p_name.operator String();
-	if (name == "hash_table") {
+	String prop_name = p_name.operator String();
+	if (prop_name == "hash_table") {
 		r_ret = hash_table;
-	} else if (name == "bucket_table") {
+	} else if (prop_name == "bucket_table") {
 		r_ret = bucket_table;
-	} else if (name == "strings") {
+	} else if (prop_name == "strings") {
 		r_ret = strings;
 	} else {
 		return false;
@@ -253,18 +253,44 @@ StringName OptimizedTranslation::get_message(const StringName &p_src_text, const
 	}
 
 	if (bucket.elem[idx].comp_size == bucket.elem[idx].uncomp_size) {
-		String rstr;
-		rstr.parse_utf8(&sptr[bucket.elem[idx].str_offset], bucket.elem[idx].uncomp_size);
-
-		return rstr;
+		return String::utf8(&sptr[bucket.elem[idx].str_offset], bucket.elem[idx].uncomp_size);
 	} else {
 		CharString uncomp;
-		uncomp.resize(bucket.elem[idx].uncomp_size + 1);
+		uncomp.resize_uninitialized(bucket.elem[idx].uncomp_size + 1);
 		smaz_decompress(&sptr[bucket.elem[idx].str_offset], bucket.elem[idx].comp_size, uncomp.ptrw(), bucket.elem[idx].uncomp_size);
-		String rstr;
-		rstr.parse_utf8(uncomp.get_data());
-		return rstr;
+		return String::utf8(uncomp.get_data());
 	}
+}
+
+Vector<String> OptimizedTranslation::get_translated_message_list() const {
+	Vector<String> msgs;
+
+	const int *htr = hash_table.ptr();
+	const uint32_t *htptr = (const uint32_t *)&htr[0];
+	const int *btr = bucket_table.ptr();
+	const uint32_t *btptr = (const uint32_t *)&btr[0];
+	const uint8_t *sr = strings.ptr();
+	const char *sptr = (const char *)&sr[0];
+
+	for (int i = 0; i < hash_table.size(); i++) {
+		uint32_t p = htptr[i];
+		if (p != 0xFFFFFFFF) {
+			const Bucket &bucket = *(const Bucket *)&btptr[p];
+			for (int j = 0; j < bucket.size; j++) {
+				if (bucket.elem[j].comp_size == bucket.elem[j].uncomp_size) {
+					String rstr = String::utf8(&sptr[bucket.elem[j].str_offset], bucket.elem[j].uncomp_size);
+					msgs.push_back(rstr);
+				} else {
+					CharString uncomp;
+					uncomp.resize_uninitialized(bucket.elem[j].uncomp_size + 1);
+					smaz_decompress(&sptr[bucket.elem[j].str_offset], bucket.elem[j].comp_size, uncomp.ptrw(), bucket.elem[j].uncomp_size);
+					String rstr = String::utf8(uncomp.get_data());
+					msgs.push_back(rstr);
+				}
+			}
+		}
+	}
+	return msgs;
 }
 
 StringName OptimizedTranslation::get_plural_message(const StringName &p_src_text, const StringName &p_plural_text, int p_n, const StringName &p_context) const {

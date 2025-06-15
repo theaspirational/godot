@@ -1,729 +1,44 @@
-/*************************************************************************/
-/*  action_map_editor.cpp                                                */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  action_map_editor.cpp                                                 */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#include "action_map_editor.h"
+#include "editor/action_map_editor.h"
 
-#include "core/input/input_map.h"
-#include "core/os/keyboard.h"
-#include "editor/editor_scale.h"
+#include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
+#include "editor/event_listener_line_edit.h"
+#include "editor/gui/editor_event_search_bar.h"
+#include "editor/input_event_configuration_dialog.h"
+#include "editor/themes/editor_scale.h"
+#include "scene/gui/check_button.h"
 #include "scene/gui/separator.h"
-
-/////////////////////////////////////////
-
-// Maps to 2*axis if value is neg, or 2*axis+1 if value is pos.
-static const char *_joy_axis_descriptions[(size_t)JoyAxis::MAX * 2] = {
-	TTRC("Left Stick Left, Joystick 0 Left"),
-	TTRC("Left Stick Right, Joystick 0 Right"),
-	TTRC("Left Stick Up, Joystick 0 Up"),
-	TTRC("Left Stick Down, Joystick 0 Down"),
-	TTRC("Right Stick Left, Joystick 1 Left"),
-	TTRC("Right Stick Right, Joystick 1 Right"),
-	TTRC("Right Stick Up, Joystick 1 Up"),
-	TTRC("Right Stick Down, Joystick 1 Down"),
-	TTRC("Joystick 2 Left"),
-	TTRC("Left Trigger, Sony L2, Xbox LT, Joystick 2 Right"),
-	TTRC("Joystick 2 Up"),
-	TTRC("Right Trigger, Sony R2, Xbox RT, Joystick 2 Down"),
-	TTRC("Joystick 3 Left"),
-	TTRC("Joystick 3 Right"),
-	TTRC("Joystick 3 Up"),
-	TTRC("Joystick 3 Down"),
-	TTRC("Joystick 4 Left"),
-	TTRC("Joystick 4 Right"),
-	TTRC("Joystick 4 Up"),
-	TTRC("Joystick 4 Down"),
-};
-
-String InputEventConfigurationDialog::get_event_text(const Ref<InputEvent> &p_event) {
-	ERR_FAIL_COND_V_MSG(p_event.is_null(), String(), "Provided event is not a valid instance of InputEvent");
-
-	// Joypad motion events will display slightly differently than what the event->as_text() provides. See #43660.
-	Ref<InputEventJoypadMotion> jpmotion = p_event;
-	if (jpmotion.is_valid()) {
-		String desc = TTR("Unknown Joypad Axis");
-		if (jpmotion->get_axis() < JoyAxis::MAX) {
-			desc = RTR(_joy_axis_descriptions[2 * (size_t)jpmotion->get_axis() + (jpmotion->get_axis_value() < 0 ? 0 : 1)]);
-		}
-
-		return vformat("Joypad Axis %s %s (%s)", itos((int64_t)jpmotion->get_axis()), jpmotion->get_axis_value() < 0 ? "-" : "+", desc);
-	} else {
-		return p_event->as_text();
-	}
-}
-
-void InputEventConfigurationDialog::_set_event(const Ref<InputEvent> &p_event) {
-	if (p_event.is_valid()) {
-		event = p_event;
-
-		// Update Label
-		event_as_text->set_text(get_event_text(event));
-
-		Ref<InputEventKey> k = p_event;
-		Ref<InputEventMouseButton> mb = p_event;
-		Ref<InputEventJoypadButton> joyb = p_event;
-		Ref<InputEventJoypadMotion> joym = p_event;
-		Ref<InputEventWithModifiers> mod = p_event;
-
-		// Update option values and visibility
-		bool show_mods = false;
-		bool show_device = false;
-		bool show_phys_key = false;
-
-		if (mod.is_valid()) {
-			show_mods = true;
-			mod_checkboxes[MOD_ALT]->set_pressed(mod->is_alt_pressed());
-			mod_checkboxes[MOD_SHIFT]->set_pressed(mod->is_shift_pressed());
-			mod_checkboxes[MOD_COMMAND]->set_pressed(mod->is_command_pressed());
-			mod_checkboxes[MOD_CTRL]->set_pressed(mod->is_ctrl_pressed());
-			mod_checkboxes[MOD_META]->set_pressed(mod->is_meta_pressed());
-
-			store_command_checkbox->set_pressed(mod->is_storing_command());
-		}
-
-		if (k.is_valid()) {
-			show_phys_key = true;
-			physical_key_checkbox->set_pressed(k->get_physical_keycode() != Key::NONE && k->get_keycode() == Key::NONE);
-
-		} else if (joyb.is_valid() || joym.is_valid() || mb.is_valid()) {
-			show_device = true;
-			_set_current_device(event->get_device());
-		}
-
-		mod_container->set_visible(show_mods);
-		device_container->set_visible(show_device);
-		physical_key_checkbox->set_visible(show_phys_key);
-		additional_options_container->show();
-
-		// Update selected item in input list.
-		if (k.is_valid() || joyb.is_valid() || joym.is_valid() || mb.is_valid()) {
-			TreeItem *category = input_list_tree->get_root()->get_first_child();
-			while (category) {
-				TreeItem *input_item = category->get_first_child();
-
-				if (input_item != nullptr) {
-					// has_type this should be always true, unless the tree structure has been misconfigured.
-					bool has_type = input_item->get_parent()->has_meta("__type");
-					int input_type = input_item->get_parent()->get_meta("__type");
-					if (!has_type) {
-						return;
-					}
-
-					// If event type matches input types of this category.
-					if ((k.is_valid() && input_type == INPUT_KEY) || (joyb.is_valid() && input_type == INPUT_JOY_BUTTON) || (joym.is_valid() && input_type == INPUT_JOY_MOTION) || (mb.is_valid() && input_type == INPUT_MOUSE_BUTTON)) {
-						// Loop through all items of this category until one matches.
-						while (input_item) {
-							bool key_match = k.is_valid() && (Variant(k->get_keycode()) == input_item->get_meta("__keycode") || Variant(k->get_physical_keycode()) == input_item->get_meta("__keycode"));
-							bool joyb_match = joyb.is_valid() && Variant(joyb->get_button_index()) == input_item->get_meta("__index");
-							bool joym_match = joym.is_valid() && Variant(joym->get_axis()) == input_item->get_meta("__axis") && joym->get_axis_value() == (float)input_item->get_meta("__value");
-							bool mb_match = mb.is_valid() && Variant(mb->get_button_index()) == input_item->get_meta("__index");
-							if (key_match || joyb_match || joym_match || mb_match) {
-								category->set_collapsed(false);
-								input_item->select(0);
-								input_list_tree->ensure_cursor_is_visible();
-								return;
-							}
-							input_item = input_item->get_next();
-						}
-					}
-				}
-
-				category->set_collapsed(true); // Event not in this category, so collapse;
-				category = category->get_next();
-			}
-		}
-	} else {
-		// Event is not valid, reset dialog
-		event = p_event;
-		Vector<String> strings;
-
-		// Reset message, promp for input according to which input types are allowed.
-		String text = TTR("Perform an Input (%s).");
-
-		if (allowed_input_types & INPUT_KEY) {
-			strings.append(TTR("Key"));
-		}
-
-		if (allowed_input_types & INPUT_JOY_BUTTON) {
-			strings.append(TTR("Joypad Button"));
-		}
-		if (allowed_input_types & INPUT_JOY_MOTION) {
-			strings.append(TTR("Joypad Axis"));
-		}
-		if (allowed_input_types & INPUT_MOUSE_BUTTON) {
-			strings.append(TTR("Mouse Button in area below"));
-		}
-		if (strings.size() == 0) {
-			text = TTR("Input Event dialog has been misconfigured: No input types are allowed.");
-			event_as_text->set_text(text);
-		} else {
-			String insert_text = String(", ").join(strings);
-			event_as_text->set_text(vformat(text, insert_text));
-		}
-
-		additional_options_container->hide();
-		input_list_tree->deselect_all();
-		_update_input_list();
-	}
-}
-
-void InputEventConfigurationDialog::_tab_selected(int p_tab) {
-	Callable signal_method = callable_mp(this, &InputEventConfigurationDialog::_listen_window_input);
-	if (p_tab == 0) {
-		// Start Listening.
-		if (!is_connected("window_input", signal_method)) {
-			connect("window_input", signal_method);
-		}
-	} else {
-		// Stop Listening.
-		if (is_connected("window_input", signal_method)) {
-			disconnect("window_input", signal_method);
-		}
-		input_list_tree->call_deferred(SNAME("ensure_cursor_is_visible"));
-		if (input_list_tree->get_selected() == nullptr) {
-			// If nothing selected, scroll to top.
-			input_list_tree->scroll_to_item(input_list_tree->get_root());
-		}
-	}
-}
-
-void InputEventConfigurationDialog::_listen_window_input(const Ref<InputEvent> &p_event) {
-	// Ignore if echo or not pressed
-	if (p_event->is_echo() || !p_event->is_pressed()) {
-		return;
-	}
-
-	// Ignore mouse motion
-	Ref<InputEventMouseMotion> mm = p_event;
-	if (mm.is_valid()) {
-		return;
-	}
-
-	// Ignore mouse button if not in the detection rect
-	Ref<InputEventMouseButton> mb = p_event;
-	if (mb.is_valid()) {
-		Rect2 r = mouse_detection_rect->get_rect();
-		if (!r.has_point(mouse_detection_rect->get_local_mouse_position() + r.get_position())) {
-			return;
-		}
-	}
-
-	// Check what the type is and if it is allowed.
-	Ref<InputEventKey> k = p_event;
-	Ref<InputEventJoypadButton> joyb = p_event;
-	Ref<InputEventJoypadMotion> joym = p_event;
-
-	int type = 0;
-	if (k.is_valid()) {
-		type = INPUT_KEY;
-	} else if (joyb.is_valid()) {
-		type = INPUT_JOY_BUTTON;
-	} else if (joym.is_valid()) {
-		type = INPUT_JOY_MOTION;
-	} else if (mb.is_valid()) {
-		type = INPUT_MOUSE_BUTTON;
-	}
-
-	if (!(allowed_input_types & type)) {
-		return;
-	}
-
-	if (joym.is_valid()) {
-		float axis_value = joym->get_axis_value();
-		if (ABS(axis_value) < 0.9) {
-			// Ignore motion below 0.9 magnitude to avoid accidental touches
-			return;
-		} else {
-			// Always make the value 1 or -1 for display consistency
-			joym->set_axis_value(SIGN(axis_value));
-		}
-	}
-
-	if (k.is_valid()) {
-		k->set_pressed(false); // to avoid serialisation of 'pressed' property - doesn't matter for actions anyway.
-		// Maintain physical keycode option state
-		if (physical_key_checkbox->is_pressed()) {
-			k->set_keycode(Key::NONE);
-		} else {
-			k->set_physical_keycode(Key::NONE);
-		}
-	}
-
-	Ref<InputEventWithModifiers> mod = p_event;
-	if (mod.is_valid()) {
-		// Maintain store command option state
-		mod->set_store_command(store_command_checkbox->is_pressed());
-
-		mod->set_window_id(0);
-	}
-
-	_set_event(p_event);
-	set_input_as_handled();
-}
-
-void InputEventConfigurationDialog::_search_term_updated(const String &) {
-	_update_input_list();
-}
-
-void InputEventConfigurationDialog::_update_input_list() {
-	input_list_tree->clear();
-
-	TreeItem *root = input_list_tree->create_item();
-	String search_term = input_list_search->get_text();
-
-	bool collapse = input_list_search->get_text().is_empty();
-
-	if (allowed_input_types & INPUT_KEY) {
-		TreeItem *kb_root = input_list_tree->create_item(root);
-		kb_root->set_text(0, TTR("Keyboard Keys"));
-		kb_root->set_icon(0, icon_cache.keyboard);
-		kb_root->set_collapsed(collapse);
-		kb_root->set_meta("__type", INPUT_KEY);
-
-		for (int i = 0; i < keycode_get_count(); i++) {
-			String name = keycode_get_name_by_index(i);
-
-			if (!search_term.is_empty() && name.findn(search_term) == -1) {
-				continue;
-			}
-
-			TreeItem *item = input_list_tree->create_item(kb_root);
-			item->set_text(0, name);
-			item->set_meta("__keycode", keycode_get_value_by_index(i));
-		}
-	}
-
-	if (allowed_input_types & INPUT_MOUSE_BUTTON) {
-		TreeItem *mouse_root = input_list_tree->create_item(root);
-		mouse_root->set_text(0, TTR("Mouse Buttons"));
-		mouse_root->set_icon(0, icon_cache.mouse);
-		mouse_root->set_collapsed(collapse);
-		mouse_root->set_meta("__type", INPUT_MOUSE_BUTTON);
-
-		MouseButton mouse_buttons[9] = { MouseButton::LEFT, MouseButton::RIGHT, MouseButton::MIDDLE, MouseButton::WHEEL_UP, MouseButton::WHEEL_DOWN, MouseButton::WHEEL_LEFT, MouseButton::WHEEL_RIGHT, MouseButton::MB_XBUTTON1, MouseButton::MB_XBUTTON2 };
-		for (int i = 0; i < 9; i++) {
-			Ref<InputEventMouseButton> mb;
-			mb.instantiate();
-			mb->set_button_index(mouse_buttons[i]);
-			String desc = get_event_text(mb);
-
-			if (!search_term.is_empty() && desc.findn(search_term) == -1) {
-				continue;
-			}
-
-			TreeItem *item = input_list_tree->create_item(mouse_root);
-			item->set_text(0, desc);
-			item->set_meta("__index", mouse_buttons[i]);
-		}
-	}
-
-	if (allowed_input_types & INPUT_JOY_BUTTON) {
-		TreeItem *joyb_root = input_list_tree->create_item(root);
-		joyb_root->set_text(0, TTR("Joypad Buttons"));
-		joyb_root->set_icon(0, icon_cache.joypad_button);
-		joyb_root->set_collapsed(collapse);
-		joyb_root->set_meta("__type", INPUT_JOY_BUTTON);
-
-		for (int i = 0; i < (int)JoyButton::MAX; i++) {
-			Ref<InputEventJoypadButton> joyb;
-			joyb.instantiate();
-			joyb->set_button_index((JoyButton)i);
-			String desc = get_event_text(joyb);
-
-			if (!search_term.is_empty() && desc.findn(search_term) == -1) {
-				continue;
-			}
-
-			TreeItem *item = input_list_tree->create_item(joyb_root);
-			item->set_text(0, desc);
-			item->set_meta("__index", i);
-		}
-	}
-
-	if (allowed_input_types & INPUT_JOY_MOTION) {
-		TreeItem *joya_root = input_list_tree->create_item(root);
-		joya_root->set_text(0, TTR("Joypad Axes"));
-		joya_root->set_icon(0, icon_cache.joypad_axis);
-		joya_root->set_collapsed(collapse);
-		joya_root->set_meta("__type", INPUT_JOY_MOTION);
-
-		for (int i = 0; i < (int)JoyAxis::MAX * 2; i++) {
-			int axis = i / 2;
-			int direction = (i & 1) ? 1 : -1;
-			Ref<InputEventJoypadMotion> joym;
-			joym.instantiate();
-			joym->set_axis((JoyAxis)axis);
-			joym->set_axis_value(direction);
-			String desc = get_event_text(joym);
-
-			if (!search_term.is_empty() && desc.findn(search_term) == -1) {
-				continue;
-			}
-
-			TreeItem *item = input_list_tree->create_item(joya_root);
-			item->set_text(0, desc);
-			item->set_meta("__axis", i >> 1);
-			item->set_meta("__value", (i & 1) ? 1 : -1);
-		}
-	}
-}
-
-void InputEventConfigurationDialog::_mod_toggled(bool p_checked, int p_index) {
-	Ref<InputEventWithModifiers> ie = event;
-
-	// Not event with modifiers
-	if (ie.is_null()) {
-		return;
-	}
-
-	if (p_index == 0) {
-		ie->set_alt_pressed(p_checked);
-	} else if (p_index == 1) {
-		ie->set_shift_pressed(p_checked);
-	} else if (p_index == 2) {
-		ie->set_command_pressed(p_checked);
-	} else if (p_index == 3) {
-		ie->set_ctrl_pressed(p_checked);
-	} else if (p_index == 4) {
-		ie->set_meta_pressed(p_checked);
-	}
-
-	_set_event(ie);
-}
-
-void InputEventConfigurationDialog::_store_command_toggled(bool p_checked) {
-	Ref<InputEventWithModifiers> ie = event;
-	if (ie.is_valid()) {
-		ie->set_store_command(p_checked);
-		_set_event(ie);
-	}
-
-	if (p_checked) {
-		// If storing Command, show it's checkbox and hide Control (Win/Lin) or Meta (Mac)
-#ifdef APPLE_STYLE_KEYS
-		mod_checkboxes[MOD_META]->hide();
-
-		mod_checkboxes[MOD_COMMAND]->show();
-		mod_checkboxes[MOD_COMMAND]->set_text("Meta (Command)");
-#else
-		mod_checkboxes[MOD_CTRL]->hide();
-
-		mod_checkboxes[MOD_COMMAND]->show();
-		mod_checkboxes[MOD_COMMAND]->set_text("Control (Command)");
-#endif
-	} else {
-		// If not, hide Command, show Control and Meta.
-		mod_checkboxes[MOD_COMMAND]->hide();
-		mod_checkboxes[MOD_CTRL]->show();
-		mod_checkboxes[MOD_META]->show();
-	}
-}
-
-void InputEventConfigurationDialog::_physical_keycode_toggled(bool p_checked) {
-	Ref<InputEventKey> k = event;
-
-	if (k.is_null()) {
-		return;
-	}
-
-	if (p_checked) {
-		k->set_physical_keycode(k->get_keycode());
-		k->set_keycode(Key::NONE);
-	} else {
-		k->set_keycode((Key)k->get_physical_keycode());
-		k->set_physical_keycode(Key::NONE);
-	}
-
-	_set_event(k);
-}
-
-void InputEventConfigurationDialog::_input_list_item_selected() {
-	TreeItem *selected = input_list_tree->get_selected();
-
-	// Invalid tree selection - type only exists on the "category" items, which are not a valid selection.
-	if (selected->has_meta("__type")) {
-		return;
-	}
-
-	InputEventConfigurationDialog::InputType input_type = (InputEventConfigurationDialog::InputType)(int)selected->get_parent()->get_meta("__type");
-
-	switch (input_type) {
-		case InputEventConfigurationDialog::INPUT_KEY: {
-			Key keycode = (Key)(int)selected->get_meta("__keycode");
-			Ref<InputEventKey> k;
-			k.instantiate();
-
-			if (physical_key_checkbox->is_pressed()) {
-				k->set_physical_keycode(keycode);
-				k->set_keycode(Key::NONE);
-			} else {
-				k->set_physical_keycode(Key::NONE);
-				k->set_keycode(keycode);
-			}
-
-			// Maintain modifier state from checkboxes
-			k->set_alt_pressed(mod_checkboxes[MOD_ALT]->is_pressed());
-			k->set_shift_pressed(mod_checkboxes[MOD_SHIFT]->is_pressed());
-			k->set_command_pressed(mod_checkboxes[MOD_COMMAND]->is_pressed());
-			k->set_ctrl_pressed(mod_checkboxes[MOD_CTRL]->is_pressed());
-			k->set_meta_pressed(mod_checkboxes[MOD_META]->is_pressed());
-			k->set_store_command(store_command_checkbox->is_pressed());
-
-			_set_event(k);
-		} break;
-		case InputEventConfigurationDialog::INPUT_MOUSE_BUTTON: {
-			MouseButton idx = (MouseButton)(int)selected->get_meta("__index");
-			Ref<InputEventMouseButton> mb;
-			mb.instantiate();
-			mb->set_button_index(idx);
-			// Maintain modifier state from checkboxes
-			mb->set_alt_pressed(mod_checkboxes[MOD_ALT]->is_pressed());
-			mb->set_shift_pressed(mod_checkboxes[MOD_SHIFT]->is_pressed());
-			mb->set_command_pressed(mod_checkboxes[MOD_COMMAND]->is_pressed());
-			mb->set_ctrl_pressed(mod_checkboxes[MOD_CTRL]->is_pressed());
-			mb->set_meta_pressed(mod_checkboxes[MOD_META]->is_pressed());
-			mb->set_store_command(store_command_checkbox->is_pressed());
-
-			_set_event(mb);
-		} break;
-		case InputEventConfigurationDialog::INPUT_JOY_BUTTON: {
-			JoyButton idx = (JoyButton)(int)selected->get_meta("__index");
-			Ref<InputEventJoypadButton> jb = InputEventJoypadButton::create_reference(idx);
-			_set_event(jb);
-		} break;
-		case InputEventConfigurationDialog::INPUT_JOY_MOTION: {
-			JoyAxis axis = (JoyAxis)(int)selected->get_meta("__axis");
-			int value = selected->get_meta("__value");
-
-			Ref<InputEventJoypadMotion> jm;
-			jm.instantiate();
-			jm->set_axis(axis);
-			jm->set_axis_value(value);
-			_set_event(jm);
-		} break;
-	}
-}
-
-void InputEventConfigurationDialog::_set_current_device(int i_device) {
-	device_id_option->select(i_device + 1);
-}
-
-int InputEventConfigurationDialog::_get_current_device() const {
-	return device_id_option->get_selected() - 1;
-}
-
-String InputEventConfigurationDialog::_get_device_string(int i_device) const {
-	if (i_device == InputMap::ALL_DEVICES) {
-		return TTR("All Devices");
-	}
-	return TTR("Device") + " " + itos(i_device);
-}
-
-void InputEventConfigurationDialog::_notification(int p_what) {
-	switch (p_what) {
-		case NOTIFICATION_ENTER_TREE:
-		case NOTIFICATION_THEME_CHANGED: {
-			input_list_search->set_right_icon(input_list_search->get_theme_icon(SNAME("Search"), SNAME("EditorIcons")));
-
-			physical_key_checkbox->set_icon(get_theme_icon(SNAME("KeyboardPhysical"), SNAME("EditorIcons")));
-
-			icon_cache.keyboard = get_theme_icon(SNAME("Keyboard"), SNAME("EditorIcons"));
-			icon_cache.mouse = get_theme_icon(SNAME("Mouse"), SNAME("EditorIcons"));
-			icon_cache.joypad_button = get_theme_icon(SNAME("JoyButton"), SNAME("EditorIcons"));
-			icon_cache.joypad_axis = get_theme_icon(SNAME("JoyAxis"), SNAME("EditorIcons"));
-
-			mouse_detection_rect->set_color(get_theme_color(SNAME("dark_color_2"), SNAME("Editor")));
-
-			_update_input_list();
-		} break;
-	}
-}
-
-void InputEventConfigurationDialog::popup_and_configure(const Ref<InputEvent> &p_event) {
-	if (p_event.is_valid()) {
-		_set_event(p_event);
-	} else {
-		// Clear Event
-		_set_event(p_event);
-
-		// Clear Checkbox Values
-		for (int i = 0; i < MOD_MAX; i++) {
-			mod_checkboxes[i]->set_pressed(false);
-		}
-
-		// Enable the Physical Key checkbox by default to encourage its use.
-		// Physical Key should be used for most game inputs as it allows keys to work
-		// on non-QWERTY layouts out of the box.
-		// This is especially important for WASD movement layouts.
-		physical_key_checkbox->set_pressed(true);
-
-		store_command_checkbox->set_pressed(true);
-		_set_current_device(0);
-
-		// Switch to "Listen" tab
-		tab_container->set_current_tab(0);
-	}
-
-	popup_centered();
-}
-
-Ref<InputEvent> InputEventConfigurationDialog::get_event() const {
-	return event;
-}
-
-void InputEventConfigurationDialog::set_allowed_input_types(int p_type_masks) {
-	allowed_input_types = p_type_masks;
-}
-
-InputEventConfigurationDialog::InputEventConfigurationDialog() {
-	allowed_input_types = INPUT_KEY | INPUT_MOUSE_BUTTON | INPUT_JOY_BUTTON | INPUT_JOY_MOTION | INPUT_MOUSE_BUTTON;
-
-	set_title(TTR("Event Configuration"));
-	set_min_size(Size2i(550 * EDSCALE, 0)); // Min width
-
-	VBoxContainer *main_vbox = memnew(VBoxContainer);
-	add_child(main_vbox);
-
-	tab_container = memnew(TabContainer);
-	tab_container->set_use_hidden_tabs_for_min_size(true);
-	tab_container->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	tab_container->connect("tab_selected", callable_mp(this, &InputEventConfigurationDialog::_tab_selected));
-	main_vbox->add_child(tab_container);
-
-	// Listen to input tab
-	VBoxContainer *vb = memnew(VBoxContainer);
-	vb->set_name(TTR("Listen for Input"));
-	event_as_text = memnew(Label);
-	event_as_text->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
-	vb->add_child(event_as_text);
-	// Mouse button detection rect (Mouse button event outside this ColorRect will be ignored)
-	mouse_detection_rect = memnew(ColorRect);
-	mouse_detection_rect->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	vb->add_child(mouse_detection_rect);
-	tab_container->add_child(vb);
-
-	// List of all input options to manually select from.
-
-	VBoxContainer *manual_vbox = memnew(VBoxContainer);
-	manual_vbox->set_name(TTR("Manual Selection"));
-	manual_vbox->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	tab_container->add_child(manual_vbox);
-
-	input_list_search = memnew(LineEdit);
-	input_list_search->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	input_list_search->set_placeholder(TTR("Filter Inputs"));
-	input_list_search->set_clear_button_enabled(true);
-	input_list_search->connect("text_changed", callable_mp(this, &InputEventConfigurationDialog::_search_term_updated));
-	manual_vbox->add_child(input_list_search);
-
-	input_list_tree = memnew(Tree);
-	input_list_tree->set_custom_minimum_size(Size2(0, 100 * EDSCALE)); // Min height for tree
-	input_list_tree->connect("item_selected", callable_mp(this, &InputEventConfigurationDialog::_input_list_item_selected));
-	input_list_tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	manual_vbox->add_child(input_list_tree);
-
-	input_list_tree->set_hide_root(true);
-	input_list_tree->set_columns(1);
-
-	_update_input_list();
-
-	// Additional Options
-	additional_options_container = memnew(VBoxContainer);
-	additional_options_container->hide();
-
-	Label *opts_label = memnew(Label);
-	opts_label->set_theme_type_variation("HeaderSmall");
-	opts_label->set_text(TTR("Additional Options"));
-	additional_options_container->add_child(opts_label);
-
-	// Device Selection
-	device_container = memnew(HBoxContainer);
-	device_container->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-
-	Label *device_label = memnew(Label);
-	device_label->set_theme_type_variation("HeaderSmall");
-	device_label->set_text(TTR("Device:"));
-	device_container->add_child(device_label);
-
-	device_id_option = memnew(OptionButton);
-	device_id_option->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	device_container->add_child(device_id_option);
-
-	for (int i = -1; i < 8; i++) {
-		device_id_option->add_item(_get_device_string(i));
-	}
-	_set_current_device(0);
-	device_container->hide();
-	additional_options_container->add_child(device_container);
-
-	// Modifier Selection
-	mod_container = memnew(HBoxContainer);
-	for (int i = 0; i < MOD_MAX; i++) {
-		String name = mods[i];
-		mod_checkboxes[i] = memnew(CheckBox);
-		mod_checkboxes[i]->connect("toggled", callable_mp(this, &InputEventConfigurationDialog::_mod_toggled), varray(i));
-		mod_checkboxes[i]->set_text(name);
-		mod_container->add_child(mod_checkboxes[i]);
-	}
-
-	mod_container->add_child(memnew(VSeparator));
-
-	store_command_checkbox = memnew(CheckBox);
-	store_command_checkbox->connect("toggled", callable_mp(this, &InputEventConfigurationDialog::_store_command_toggled));
-	store_command_checkbox->set_pressed(true);
-	store_command_checkbox->set_text(TTR("Store Command"));
-#ifdef APPLE_STYLE_KEYS
-	store_command_checkbox->set_tooltip(TTR("Toggles between serializing 'command' and 'meta'. Used for compatibility with Windows/Linux style keyboard."));
-#else
-	store_command_checkbox->set_tooltip(TTR("Toggles between serializing 'command' and 'control'. Used for compatibility with Apple Style keyboards."));
-#endif
-	mod_container->add_child(store_command_checkbox);
-
-	mod_container->hide();
-	additional_options_container->add_child(mod_container);
-
-	// Physical Key Checkbox
-
-	physical_key_checkbox = memnew(CheckBox);
-	physical_key_checkbox->set_text(TTR("Use Physical Keycode"));
-	physical_key_checkbox->set_tooltip(TTR("Stores the physical position of the key on the keyboard rather than the key's value. Used for compatibility with non-latin layouts.\nThis should generally be enabled for most game shortcuts, but not in non-game applications."));
-	physical_key_checkbox->connect("toggled", callable_mp(this, &InputEventConfigurationDialog::_physical_keycode_toggled));
-	physical_key_checkbox->hide();
-	additional_options_container->add_child(physical_key_checkbox);
-
-	main_vbox->add_child(additional_options_container);
-
-	// Default to first tab
-	tab_container->set_current_tab(0);
-}
-
-/////////////////////////////////////////
+#include "scene/gui/tree.h"
 
 static bool _is_action_name_valid(const String &p_name) {
 	const char32_t *cstr = p_name.get_data();
@@ -758,6 +73,24 @@ void ActionMapEditor::_add_action_pressed() {
 	_add_action(add_edit->get_text());
 }
 
+String ActionMapEditor::_check_new_action_name(const String &p_name) {
+	if (p_name.is_empty() || !_is_action_name_valid(p_name)) {
+		return TTR("Invalid action name. It cannot be empty nor contain '/', ':', '=', '\\' or '\"'");
+	}
+
+	if (_has_action(p_name)) {
+		return vformat(TTR("An action with the name '%s' already exists."), p_name);
+	}
+
+	return "";
+}
+
+void ActionMapEditor::_add_edit_text_changed(const String &p_name) {
+	const String error = _check_new_action_name(p_name);
+	add_button->set_tooltip_text(error);
+	add_button->set_disabled(!error.is_empty());
+}
+
 bool ActionMapEditor::_has_action(const String &p_name) const {
 	for (const ActionInfo &action_info : actions_cache) {
 		if (p_name == action_info.name) {
@@ -768,13 +101,9 @@ bool ActionMapEditor::_has_action(const String &p_name) const {
 }
 
 void ActionMapEditor::_add_action(const String &p_name) {
-	if (p_name.is_empty() || !_is_action_name_valid(p_name)) {
-		show_message(TTR("Invalid action name. It cannot be empty nor contain '/', ':', '=', '\\' or '\"'"));
-		return;
-	}
-
-	if (_has_action(p_name)) {
-		show_message(vformat(TTR("An action with the name '%s' already exists."), p_name));
+	String error = _check_new_action_name(p_name);
+	if (!error.is_empty()) {
+		show_message(error);
 		return;
 	}
 
@@ -822,7 +151,11 @@ void ActionMapEditor::_action_edited() {
 	}
 }
 
-void ActionMapEditor::_tree_button_pressed(Object *p_item, int p_column, int p_id) {
+void ActionMapEditor::_tree_button_pressed(Object *p_item, int p_column, int p_id, MouseButton p_button) {
+	if (p_button != MouseButton::LEFT) {
+		return;
+	}
+
 	ItemButton option = (ItemButton)p_id;
 
 	TreeItem *item = Object::cast_to<TreeItem>(p_item);
@@ -836,7 +169,7 @@ void ActionMapEditor::_tree_button_pressed(Object *p_item, int p_column, int p_i
 			current_action_name = item->get_meta("__name");
 			current_action_event_index = -1;
 
-			event_config_dialog->popup_and_configure();
+			event_config_dialog->popup_and_configure(Ref<InputEvent>(), current_action_name);
 		} break;
 		case ActionMapEditor::BUTTON_EDIT_EVENT: {
 			// Action and Action name is located on the parent of the event.
@@ -847,7 +180,7 @@ void ActionMapEditor::_tree_button_pressed(Object *p_item, int p_column, int p_i
 
 			Ref<InputEvent> ie = item->get_meta("__event");
 			if (ie.is_valid()) {
-				event_config_dialog->popup_and_configure(ie);
+				event_config_dialog->popup_and_configure(ie, current_action_name);
 			}
 		} break;
 		case ActionMapEditor::BUTTON_REMOVE_ACTION: {
@@ -868,6 +201,14 @@ void ActionMapEditor::_tree_button_pressed(Object *p_item, int p_column, int p_i
 
 			emit_signal(SNAME("action_edited"), action_name, action);
 		} break;
+		case ActionMapEditor::BUTTON_REVERT_ACTION: {
+			ERR_FAIL_COND_MSG(!item->has_meta("__action_initial"), "Tree Item for action which can be reverted is expected to have meta value with initial value of action.");
+
+			Dictionary action = item->get_meta("__action_initial").duplicate();
+			String action_name = item->get_meta("__name");
+
+			emit_signal(SNAME("action_edited"), action_name, action);
+		} break;
 		default:
 			break;
 	}
@@ -880,12 +221,12 @@ void ActionMapEditor::_tree_item_activated() {
 		return;
 	}
 
-	_tree_button_pressed(item, 2, BUTTON_EDIT_EVENT);
+	_tree_button_pressed(item, 2, BUTTON_EDIT_EVENT, MouseButton::LEFT);
 }
 
-void ActionMapEditor::set_show_builtin_actions(bool p_show) {
+void ActionMapEditor::_set_show_builtin_actions(bool p_show) {
 	show_builtin_actions = p_show;
-	show_builtin_actions_checkbutton->set_pressed(p_show);
+	EditorSettings::get_singleton()->set_project_metadata("project_settings", "show_builtin_actions", show_builtin_actions);
 
 	// Prevent unnecessary updates of action list when cache is empty.
 	if (!actions_cache.is_empty()) {
@@ -893,7 +234,16 @@ void ActionMapEditor::set_show_builtin_actions(bool p_show) {
 	}
 }
 
-void ActionMapEditor::_search_term_updated(const String &) {
+void ActionMapEditor::_on_search_bar_value_changed() {
+	if (action_list_search_bar->is_searching()) {
+		show_builtin_actions_checkbutton->set_pressed_no_signal(true);
+		show_builtin_actions_checkbutton->set_disabled(true);
+		show_builtin_actions_checkbutton->set_tooltip_text(TTRC("Built-in actions are always shown when searching."));
+	} else {
+		show_builtin_actions_checkbutton->set_pressed_no_signal(show_builtin_actions);
+		show_builtin_actions_checkbutton->set_disabled(false);
+		show_builtin_actions_checkbutton->set_tooltip_text(String());
+	}
 	update_action_list();
 }
 
@@ -907,7 +257,10 @@ Variant ActionMapEditor::get_drag_data_fw(const Point2 &p_point, Control *p_from
 	Label *label = memnew(Label(name));
 	label->set_theme_type_variation("HeaderSmall");
 	label->set_modulate(Color(1, 1, 1, 1.0f));
+	label->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 	action_tree->set_drag_preview(label);
+
+	get_viewport()->gui_set_drag_description(vformat(RTR("Action %s"), name));
 
 	Dictionary drag_data;
 
@@ -918,6 +271,8 @@ Variant ActionMapEditor::get_drag_data_fw(const Point2 &p_point, Control *p_from
 	if (selected->has_meta("__event")) {
 		drag_data["input_type"] = "event";
 	}
+
+	drag_data["source"] = selected->get_instance_id();
 
 	action_tree->set_drop_mode_flags(Tree::DROP_MODE_INBETWEEN);
 
@@ -930,9 +285,11 @@ bool ActionMapEditor::can_drop_data_fw(const Point2 &p_point, const Variant &p_d
 		return false;
 	}
 
+	TreeItem *source = Object::cast_to<TreeItem>(ObjectDB::get_instance(d["source"].operator ObjectID()));
 	TreeItem *selected = action_tree->get_selected();
-	TreeItem *item = action_tree->get_item_at_position(p_point);
-	if (!selected || !item || item == selected) {
+
+	TreeItem *item = (p_point == Vector2(Math::INF, Math::INF)) ? selected : action_tree->get_item_at_position(p_point);
+	if (!selected || !item || item == source) {
 		return false;
 	}
 
@@ -955,12 +312,12 @@ void ActionMapEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data,
 	}
 
 	TreeItem *selected = action_tree->get_selected();
-	TreeItem *target = action_tree->get_item_at_position(p_point);
-	bool drop_above = action_tree->get_drop_section_at_position(p_point) == -1;
-
+	TreeItem *target = (p_point == Vector2(Math::INF, Math::INF)) ? selected : action_tree->get_item_at_position(p_point);
 	if (!target) {
 		return;
 	}
+
+	bool drop_above = ((p_point == Vector2(Math::INF, Math::INF)) ? action_tree->get_drop_section_at_position(action_tree->get_item_rect(target).position) : action_tree->get_drop_section_at_position(p_point)) == -1;
 
 	Dictionary d = p_data;
 	if (d["input_type"] == "action") {
@@ -1007,18 +364,25 @@ void ActionMapEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data,
 
 void ActionMapEditor::_notification(int p_what) {
 	switch (p_what) {
-		case NOTIFICATION_ENTER_TREE:
+		case NOTIFICATION_TRANSLATION_CHANGED: {
+			if (!actions_cache.is_empty()) {
+				update_action_list();
+			}
+			if (!add_button->get_tooltip_text().is_empty()) {
+				_add_edit_text_changed(add_edit->get_text());
+			}
+		} break;
+
 		case NOTIFICATION_THEME_CHANGED: {
-			action_list_search->set_right_icon(get_theme_icon(SNAME("Search"), SNAME("EditorIcons")));
+			add_button->set_button_icon(get_editor_theme_icon(SNAME("Add")));
+			if (!actions_cache.is_empty()) {
+				update_action_list();
+			}
 		} break;
 	}
 }
 
 void ActionMapEditor::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("_get_drag_data_fw"), &ActionMapEditor::get_drag_data_fw);
-	ClassDB::bind_method(D_METHOD("_can_drop_data_fw"), &ActionMapEditor::can_drop_data_fw);
-	ClassDB::bind_method(D_METHOD("_drop_data_fw"), &ActionMapEditor::drop_data_fw);
-
 	ADD_SIGNAL(MethodInfo("action_added", PropertyInfo(Variant::STRING, "name")));
 	ADD_SIGNAL(MethodInfo("action_edited", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::DICTIONARY, "new_action")));
 	ADD_SIGNAL(MethodInfo("action_removed", PropertyInfo(Variant::STRING, "name")));
@@ -1027,11 +391,31 @@ void ActionMapEditor::_bind_methods() {
 }
 
 LineEdit *ActionMapEditor::get_search_box() const {
-	return action_list_search;
+	return action_list_search_bar->get_name_search_box();
+}
+
+LineEdit *ActionMapEditor::get_path_box() const {
+	return add_edit;
 }
 
 InputEventConfigurationDialog *ActionMapEditor::get_configuration_dialog() {
 	return event_config_dialog;
+}
+
+bool ActionMapEditor::_should_display_action(const String &p_name, const Array &p_events) const {
+	const Ref<InputEvent> search_ev = action_list_search_bar->get_event();
+	bool event_match = true;
+	if (search_ev.is_valid()) {
+		event_match = false;
+		for (int i = 0; i < p_events.size(); ++i) {
+			const Ref<InputEvent> ev = p_events[i];
+			if (ev.is_valid() && ev->is_match(search_ev, true)) {
+				event_match = true;
+			}
+		}
+	}
+
+	return event_match && action_list_search_bar->get_name().is_subsequence_ofn(p_name);
 }
 
 void ActionMapEditor::update_action_list(const Vector<ActionInfo> &p_action_infos) {
@@ -1042,34 +426,27 @@ void ActionMapEditor::update_action_list(const Vector<ActionInfo> &p_action_info
 	action_tree->clear();
 	TreeItem *root = action_tree->create_item();
 
-	int uneditable_count = 0;
-
-	for (int i = 0; i < actions_cache.size(); i++) {
-		ActionInfo action_info = actions_cache[i];
-
-		if (!action_info.editable) {
-			uneditable_count++;
-		}
-
-		String search_term = action_list_search->get_text();
-		if (!search_term.is_empty() && action_info.name.findn(search_term) == -1) {
-			continue;
-		}
-
-		if (!action_info.editable && !show_builtin_actions) {
-			continue;
-		}
-
+	for (const ActionInfo &action_info : actions_cache) {
 		const Array events = action_info.action["events"];
+		if (!_should_display_action(action_info.name, events)) {
+			continue;
+		}
+
+		if (!action_info.editable && !action_list_search_bar->is_searching() && !show_builtin_actions) {
+			continue;
+		}
+
 		const Variant deadzone = action_info.action["deadzone"];
 
 		// Update Tree...
 
 		TreeItem *action_item = action_tree->create_item(root);
+		ERR_FAIL_NULL(action_item);
 		action_item->set_meta("__action", action_info.action);
 		action_item->set_meta("__name", action_info.name);
 
 		// First Column - Action Name
+		action_item->set_auto_translate_mode(0, AUTO_TRANSLATE_MODE_DISABLED);
 		action_item->set_text(0, action_info.name);
 		action_item->set_editable(0, action_info.editable);
 		action_item->set_icon(0, action_info.icon);
@@ -1081,11 +458,18 @@ void ActionMapEditor::update_action_list(const Vector<ActionInfo> &p_action_info
 		action_item->set_range(1, deadzone);
 
 		// Third column - buttons
-		action_item->add_button(2, action_tree->get_theme_icon(SNAME("Add"), SNAME("EditorIcons")), BUTTON_ADD_EVENT, false, TTR("Add Event"));
-		action_item->add_button(2, action_tree->get_theme_icon(SNAME("Remove"), SNAME("EditorIcons")), BUTTON_REMOVE_ACTION, !action_info.editable, action_info.editable ? TTR("Remove Action") : TTR("Cannot Remove Action"));
+		if (action_info.has_initial) {
+			bool deadzone_eq = action_info.action_initial["deadzone"] == action_info.action["deadzone"];
+			bool events_eq = Shortcut::is_event_array_equal(action_info.action_initial["events"], action_info.action["events"]);
+			bool action_eq = deadzone_eq && events_eq;
+			action_item->set_meta("__action_initial", action_info.action_initial);
+			action_item->add_button(2, get_editor_theme_icon(SNAME("ReloadSmall")), BUTTON_REVERT_ACTION, action_eq, action_eq ? TTRC("Cannot Revert - Action is same as initial") : TTRC("Revert Action"));
+		}
+		action_item->add_button(2, get_editor_theme_icon(SNAME("Add")), BUTTON_ADD_EVENT, false, TTRC("Add Event"));
+		action_item->add_button(2, get_editor_theme_icon(SNAME("Remove")), BUTTON_REMOVE_ACTION, !action_info.editable, action_info.editable ? TTRC("Remove Action") : TTRC("Cannot Remove Action"));
 
-		action_item->set_custom_bg_color(0, action_tree->get_theme_color(SNAME("prop_subsection"), SNAME("Editor")));
-		action_item->set_custom_bg_color(1, action_tree->get_theme_color(SNAME("prop_subsection"), SNAME("Editor")));
+		action_item->set_custom_bg_color(0, get_theme_color(SNAME("prop_subsection"), EditorStringName(Editor)));
+		action_item->set_custom_bg_color(1, get_theme_color(SNAME("prop_subsection"), EditorStringName(Editor)));
 
 		for (int evnt_idx = 0; evnt_idx < events.size(); evnt_idx++) {
 			Ref<InputEvent> event = events[evnt_idx];
@@ -1096,38 +480,43 @@ void ActionMapEditor::update_action_list(const Vector<ActionInfo> &p_action_info
 			TreeItem *event_item = action_tree->create_item(action_item);
 
 			// First Column - Text
-			event_item->set_text(0, event_config_dialog->get_event_text(event)); // Need to us the special description for JoypadMotion here, so don't use as_text() directly.
+			event_item->set_auto_translate_mode(0, AUTO_TRANSLATE_MODE_DISABLED);
+			event_item->set_text(0, EventListenerLineEdit::get_event_text(event, true));
 			event_item->set_meta("__event", event);
 			event_item->set_meta("__index", evnt_idx);
 
 			// First Column - Icon
 			Ref<InputEventKey> k = event;
 			if (k.is_valid()) {
-				if (k->get_physical_keycode() == Key::NONE) {
-					event_item->set_icon(0, action_tree->get_theme_icon(SNAME("Keyboard"), SNAME("EditorIcons")));
+				if (k->get_physical_keycode() == Key::NONE && k->get_keycode() == Key::NONE && k->get_key_label() != Key::NONE) {
+					event_item->set_icon(0, get_editor_theme_icon(SNAME("KeyboardLabel")));
+				} else if (k->get_keycode() != Key::NONE) {
+					event_item->set_icon(0, get_editor_theme_icon(SNAME("Keyboard")));
+				} else if (k->get_physical_keycode() != Key::NONE) {
+					event_item->set_icon(0, get_editor_theme_icon(SNAME("KeyboardPhysical")));
 				} else {
-					event_item->set_icon(0, action_tree->get_theme_icon(SNAME("KeyboardPhysical"), SNAME("EditorIcons")));
+					event_item->set_icon(0, get_editor_theme_icon(SNAME("KeyboardError")));
 				}
 			}
 
 			Ref<InputEventMouseButton> mb = event;
 			if (mb.is_valid()) {
-				event_item->set_icon(0, action_tree->get_theme_icon(SNAME("Mouse"), SNAME("EditorIcons")));
+				event_item->set_icon(0, get_editor_theme_icon(SNAME("Mouse")));
 			}
 
 			Ref<InputEventJoypadButton> jb = event;
 			if (jb.is_valid()) {
-				event_item->set_icon(0, action_tree->get_theme_icon(SNAME("JoyButton"), SNAME("EditorIcons")));
+				event_item->set_icon(0, get_editor_theme_icon(SNAME("JoyButton")));
 			}
 
 			Ref<InputEventJoypadMotion> jm = event;
 			if (jm.is_valid()) {
-				event_item->set_icon(0, action_tree->get_theme_icon(SNAME("JoyAxis"), SNAME("EditorIcons")));
+				event_item->set_icon(0, get_editor_theme_icon(SNAME("JoyAxis")));
 			}
 
 			// Third Column - Buttons
-			event_item->add_button(2, action_tree->get_theme_icon(SNAME("Edit"), SNAME("EditorIcons")), BUTTON_EDIT_EVENT, false, TTR("Edit Event"));
-			event_item->add_button(2, action_tree->get_theme_icon(SNAME("Remove"), SNAME("EditorIcons")), BUTTON_REMOVE_EVENT, false, TTR("Remove Event"));
+			event_item->add_button(2, get_editor_theme_icon(SNAME("Edit")), BUTTON_EDIT_EVENT, false, TTRC("Edit Event"), TTRC("Edit Event"));
+			event_item->add_button(2, get_editor_theme_icon(SNAME("Remove")), BUTTON_REMOVE_EVENT, false, TTRC("Remove Event"), TTRC("Remove Event"));
 			event_item->set_button_color(2, 0, Color(1, 1, 1, 0.75));
 			event_item->set_button_color(2, 1, Color(1, 1, 1, 0.75));
 		}
@@ -1136,36 +525,18 @@ void ActionMapEditor::update_action_list(const Vector<ActionInfo> &p_action_info
 
 void ActionMapEditor::show_message(const String &p_message) {
 	message->set_text(p_message);
-	message->popup_centered(Size2(300, 100) * EDSCALE);
-}
-
-void ActionMapEditor::use_external_search_box(LineEdit *p_searchbox) {
-	memdelete(action_list_search);
-	action_list_search = p_searchbox;
-	action_list_search->connect("text_changed", callable_mp(this, &ActionMapEditor::_search_term_updated));
+	message->popup_centered();
 }
 
 ActionMapEditor::ActionMapEditor() {
 	// Main Vbox Container
 	VBoxContainer *main_vbox = memnew(VBoxContainer);
-	main_vbox->set_anchors_and_offsets_preset(PRESET_WIDE);
+	main_vbox->set_anchors_and_offsets_preset(PRESET_FULL_RECT);
 	add_child(main_vbox);
 
-	HBoxContainer *top_hbox = memnew(HBoxContainer);
-	main_vbox->add_child(top_hbox);
-
-	action_list_search = memnew(LineEdit);
-	action_list_search->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	action_list_search->set_placeholder(TTR("Filter Actions"));
-	action_list_search->set_clear_button_enabled(true);
-	action_list_search->connect("text_changed", callable_mp(this, &ActionMapEditor::_search_term_updated));
-	top_hbox->add_child(action_list_search);
-
-	show_builtin_actions_checkbutton = memnew(CheckButton);
-	show_builtin_actions_checkbutton->set_pressed(false);
-	show_builtin_actions_checkbutton->set_text(TTR("Show Built-in Actions"));
-	show_builtin_actions_checkbutton->connect("toggled", callable_mp(this, &ActionMapEditor::set_show_builtin_actions));
-	top_hbox->add_child(show_builtin_actions_checkbutton);
+	action_list_search_bar = memnew(EditorEventSearchBar);
+	action_list_search_bar->connect(SceneStringName(value_changed), callable_mp(this, &ActionMapEditor::_on_search_bar_value_changed));
+	main_vbox->add_child(action_list_search_bar);
 
 	// Adding Action line edit + button
 	add_hbox = memnew(HBoxContainer);
@@ -1173,41 +544,57 @@ ActionMapEditor::ActionMapEditor() {
 
 	add_edit = memnew(LineEdit);
 	add_edit->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	add_edit->set_placeholder(TTR("Add New Action"));
+	add_edit->set_placeholder(TTRC("Add New Action"));
+	add_edit->set_accessibility_name(TTRC("Add New Action"));
 	add_edit->set_clear_button_enabled(true);
-	add_edit->connect("text_submitted", callable_mp(this, &ActionMapEditor::_add_action));
+	add_edit->set_keep_editing_on_text_submit(true);
+	add_edit->connect(SceneStringName(text_changed), callable_mp(this, &ActionMapEditor::_add_edit_text_changed));
+	add_edit->connect(SceneStringName(text_submitted), callable_mp(this, &ActionMapEditor::_add_action));
 	add_hbox->add_child(add_edit);
 
-	Button *add_button = memnew(Button);
-	add_button->set_text(TTR("Add"));
-	add_button->connect("pressed", callable_mp(this, &ActionMapEditor::_add_action_pressed));
+	add_button = memnew(Button);
+	add_button->set_text(TTRC("Add"));
+	add_button->connect(SceneStringName(pressed), callable_mp(this, &ActionMapEditor::_add_action_pressed));
 	add_hbox->add_child(add_button);
+	// Disable the button and set its tooltip.
+	_add_edit_text_changed(add_edit->get_text());
+
+	add_hbox->add_child(memnew(VSeparator));
+
+	show_builtin_actions_checkbutton = memnew(CheckButton);
+	show_builtin_actions_checkbutton->set_text(TTRC("Show Built-in Actions"));
+	show_builtin_actions_checkbutton->connect(SceneStringName(toggled), callable_mp(this, &ActionMapEditor::_set_show_builtin_actions));
+	add_hbox->add_child(show_builtin_actions_checkbutton);
+
+	show_builtin_actions = EditorSettings::get_singleton()->get_project_metadata("project_settings", "show_builtin_actions", false);
+	show_builtin_actions_checkbutton->set_pressed_no_signal(show_builtin_actions);
 
 	main_vbox->add_child(add_hbox);
 
 	// Action Editor Tree
 	action_tree = memnew(Tree);
 	action_tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	action_tree->set_accessibility_name(TTRC("Action Map"));
 	action_tree->set_columns(3);
 	action_tree->set_hide_root(true);
 	action_tree->set_column_titles_visible(true);
-	action_tree->set_column_title(0, TTR("Action"));
+	action_tree->set_column_title(0, TTRC("Action"));
 	action_tree->set_column_clip_content(0, true);
-	action_tree->set_column_title(1, TTR("Deadzone"));
+	action_tree->set_column_title(1, TTRC("Deadzone"));
 	action_tree->set_column_expand(1, false);
 	action_tree->set_column_custom_minimum_width(1, 80 * EDSCALE);
 	action_tree->set_column_expand(2, false);
 	action_tree->set_column_custom_minimum_width(2, 50 * EDSCALE);
-	action_tree->connect("item_edited", callable_mp(this, &ActionMapEditor::_action_edited));
+	action_tree->connect("item_edited", callable_mp(this, &ActionMapEditor::_action_edited), CONNECT_DEFERRED);
 	action_tree->connect("item_activated", callable_mp(this, &ActionMapEditor::_tree_item_activated));
-	action_tree->connect("button_pressed", callable_mp(this, &ActionMapEditor::_tree_button_pressed));
+	action_tree->connect("button_clicked", callable_mp(this, &ActionMapEditor::_tree_button_pressed));
 	main_vbox->add_child(action_tree);
 
-	action_tree->set_drag_forwarding(this);
+	SET_DRAG_FORWARDING_GCD(action_tree, ActionMapEditor);
 
 	// Adding event dialog
 	event_config_dialog = memnew(InputEventConfigurationDialog);
-	event_config_dialog->connect("confirmed", callable_mp(this, &ActionMapEditor::_event_config_confirmed));
+	event_config_dialog->connect(SceneStringName(confirmed), callable_mp(this, &ActionMapEditor::_event_config_confirmed));
 	add_child(event_config_dialog);
 
 	message = memnew(AcceptDialog);

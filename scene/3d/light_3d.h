@@ -1,35 +1,34 @@
-/*************************************************************************/
-/*  light_3d.h                                                           */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  light_3d.h                                                            */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef LIGHT_3D_H
-#define LIGHT_3D_H
+#pragma once
 
 #include "scene/3d/visual_instance_3d.h"
 
@@ -40,6 +39,7 @@ public:
 	enum Param {
 		PARAM_ENERGY = RS::LIGHT_PARAM_ENERGY,
 		PARAM_INDIRECT_ENERGY = RS::LIGHT_PARAM_INDIRECT_ENERGY,
+		PARAM_VOLUMETRIC_FOG_ENERGY = RS::LIGHT_PARAM_VOLUMETRIC_FOG_ENERGY,
 		PARAM_SPECULAR = RS::LIGHT_PARAM_SPECULAR,
 		PARAM_RANGE = RS::LIGHT_PARAM_RANGE,
 		PARAM_SIZE = RS::LIGHT_PARAM_SIZE,
@@ -54,9 +54,10 @@ public:
 		PARAM_SHADOW_NORMAL_BIAS = RS::LIGHT_PARAM_SHADOW_NORMAL_BIAS,
 		PARAM_SHADOW_BIAS = RS::LIGHT_PARAM_SHADOW_BIAS,
 		PARAM_SHADOW_PANCAKE_SIZE = RS::LIGHT_PARAM_SHADOW_PANCAKE_SIZE,
+		PARAM_SHADOW_OPACITY = RS::LIGHT_PARAM_SHADOW_OPACITY,
 		PARAM_SHADOW_BLUR = RS::LIGHT_PARAM_SHADOW_BLUR,
-		PARAM_SHADOW_VOLUMETRIC_FOG_FADE = RS::LIGHT_PARAM_SHADOW_VOLUMETRIC_FOG_FADE,
 		PARAM_TRANSMITTANCE_BIAS = RS::LIGHT_PARAM_TRANSMITTANCE_BIAS,
+		PARAM_INTENSITY = RS::LIGHT_PARAM_INTENSITY,
 		PARAM_MAX = RS::LIGHT_PARAM_MAX
 	};
 
@@ -73,6 +74,7 @@ private:
 	bool negative = false;
 	bool reverse_cull = false;
 	uint32_t cull_mask = 0;
+	uint32_t shadow_caster_mask = 0xFFFFFFFF;
 	bool distance_fade_enabled = false;
 	real_t distance_fade_begin = 40.0;
 	real_t distance_fade_shadow = 50.0;
@@ -82,15 +84,19 @@ private:
 	void _update_visibility();
 	BakeMode bake_mode = BAKE_DYNAMIC;
 	Ref<Texture2D> projector;
+	Color correlated_color = Color(1.0, 1.0, 1.0);
+	float temperature = 6500.0;
 
 	// bind helpers
+
+	virtual void owner_changed_notify() override;
 
 protected:
 	RID light;
 
 	static void _bind_methods();
 	void _notification(int p_what);
-	virtual void _validate_property(PropertyInfo &property) const override;
+	void _validate_property(PropertyInfo &p_property) const;
 
 	Light3D(RenderingServer::LightType p_type);
 
@@ -130,13 +136,21 @@ public:
 	void set_shadow_reverse_cull_face(bool p_enable);
 	bool get_shadow_reverse_cull_face() const;
 
+	void set_shadow_caster_mask(uint32_t p_caster_mask);
+	uint32_t get_shadow_caster_mask() const;
+
 	void set_bake_mode(BakeMode p_mode);
 	BakeMode get_bake_mode() const;
 
 	void set_projector(const Ref<Texture2D> &p_texture);
 	Ref<Texture2D> get_projector() const;
 
+	void set_temperature(const float p_temperature);
+	float get_temperature() const;
+	Color get_correlated_color() const;
+
 	virtual AABB get_aabb() const override;
+	virtual PackedStringArray get_configuration_warnings() const override;
 
 	Light3D();
 	~Light3D();
@@ -168,7 +182,7 @@ private:
 
 protected:
 	static void _bind_methods();
-	virtual void _validate_property(PropertyInfo &property) const override;
+	void _validate_property(PropertyInfo &p_property) const;
 
 public:
 	void set_shadow_mode(ShadowMode p_mode);
@@ -206,7 +220,7 @@ public:
 	void set_shadow_mode(ShadowMode p_mode);
 	ShadowMode get_shadow_mode() const;
 
-	TypedArray<String> get_configuration_warnings() const override;
+	PackedStringArray get_configuration_warnings() const override;
 
 	OmniLight3D();
 };
@@ -220,10 +234,7 @@ protected:
 	static void _bind_methods();
 
 public:
-	TypedArray<String> get_configuration_warnings() const override;
+	PackedStringArray get_configuration_warnings() const override;
 
-	SpotLight3D() :
-			Light3D(RenderingServer::LIGHT_SPOT) {}
+	SpotLight3D();
 };
-
-#endif // LIGHT_3D_H

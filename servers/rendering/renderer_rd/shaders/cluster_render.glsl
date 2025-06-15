@@ -65,14 +65,9 @@ void main() {
 
 #VERSION_DEFINES
 
-#if defined(has_GL_KHR_shader_subgroup_ballot) && defined(has_GL_KHR_shader_subgroup_arithmetic) && defined(has_GL_KHR_shader_subgroup_vote)
-
 #extension GL_KHR_shader_subgroup_ballot : enable
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_KHR_shader_subgroup_vote : enable
-
-#define USE_SUBGROUPS
-#endif
 
 layout(location = 0) in float depth_interp;
 layout(location = 1) in flat uint element_index;
@@ -99,6 +94,10 @@ layout(set = 0, binding = 3, std430) buffer restrict ClusterRender {
 }
 cluster_render;
 
+#ifdef USE_ATTACHMENT
+layout(location = 0) out vec4 frag_color;
+#endif
+
 void main() {
 	//convert from screen to cluster
 	uvec2 cluster = uvec2(gl_FragCoord.xy) >> state.screen_to_clusters_shift;
@@ -112,10 +111,9 @@ void main() {
 	uint usage_write_offset = cluster_offset + (element_index >> 5);
 	uint usage_write_bit = 1 << (element_index & 0x1F);
 
-#ifdef USE_SUBGROUPS
+	uint aux = 0;
 
 	uint cluster_thread_group_index;
-
 	if (!gl_HelperInvocation) {
 		//https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf
 
@@ -137,14 +135,10 @@ void main() {
 		cluster_thread_group_index = subgroupBallotExclusiveBitCount(mask);
 
 		if (cluster_thread_group_index == 0) {
-			atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);
+			aux = atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);
 		}
 	}
-#else
-	if (!gl_HelperInvocation) {
-		atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);
-	}
-#endif
+
 	//find the current element in the depth usage list and mark the current depth as used
 	float unit_depth = depth_interp * state.inv_z_far;
 
@@ -153,16 +147,14 @@ void main() {
 	uint z_write_offset = cluster_offset + state.cluster_depth_offset + element_index;
 	uint z_write_bit = 1 << z_bit;
 
-#ifdef USE_SUBGROUPS
 	if (!gl_HelperInvocation) {
 		z_write_bit = subgroupOr(z_write_bit); //merge all Zs
 		if (cluster_thread_group_index == 0) {
-			atomicOr(cluster_render.data[z_write_offset], z_write_bit);
+			aux = atomicOr(cluster_render.data[z_write_offset], z_write_bit);
 		}
 	}
-#else
-	if (!gl_HelperInvocation) {
-		atomicOr(cluster_render.data[z_write_offset], z_write_bit);
-	}
+
+#ifdef USE_ATTACHMENT
+	frag_color = vec4(float(aux));
 #endif
 }

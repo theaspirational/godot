@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 - 2022 Samsung Electronics Co., Ltd. All rights reserved.
+ * Copyright (c) 2021 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #include <memory.h>
 #include <turbojpeg.h>
-#include "tvgLoader.h"
 #include "tvgJpgLoader.h"
 
 /************************************************************************/
@@ -37,11 +36,12 @@ void JpgLoader::clear()
     freeData = false;
 }
 
+
 /************************************************************************/
 /* External Class Implementation                                        */
 /************************************************************************/
 
-JpgLoader::JpgLoader()
+JpgLoader::JpgLoader() : ImageLoader(FileType::Jpg)
 {
     jpegDecompressor = tjInitDecompress();
 }
@@ -49,18 +49,17 @@ JpgLoader::JpgLoader()
 
 JpgLoader::~JpgLoader()
 {
-    if (freeData) free(data);
+    clear();
     tjDestroy(jpegDecompressor);
 
     //This image is shared with raster engine.
-    tjFree(image);
+    tjFree(surface.buf8);
 }
 
 
 bool JpgLoader::open(const string& path)
 {
-    clear();
-
+#ifdef THORVG_FILE_IO_SUPPORT
     auto jpegFile = fopen(path.c_str(), "rb");
     if (!jpegFile) return false;
 
@@ -96,13 +95,14 @@ failure:
 finalize:
     fclose(jpegFile);
     return ret;
+#else
+    return false;
+#endif
 }
 
 
 bool JpgLoader::open(const char* data, uint32_t size, bool copy)
 {
-    clear();
-
     int width, height, subSample, colorSpace;
     if (tjDecompressHeader3(jpegDecompressor, (unsigned char *) data, size, &width, &height, &subSample, &colorSpace) < 0) return false;
 
@@ -126,39 +126,39 @@ bool JpgLoader::open(const char* data, uint32_t size, bool copy)
 
 bool JpgLoader::read()
 {
-    if (image) tjFree(image);
-    image = (unsigned char *)tjAlloc(static_cast<int>(w) * static_cast<int>(h) * tjPixelSize[TJPF_BGRX]);
+    if (!LoadModule::read()) return true;
+
+    if (w == 0 || h == 0) return false;
+
+    //determine the image format
+    TJPF format;
+    if (ImageLoader::cs == ColorSpace::ARGB8888 || ImageLoader::cs == ColorSpace::ARGB8888S) {
+        format = TJPF_BGRX;
+        surface.cs = ColorSpace::ARGB8888;
+    } else {
+        format = TJPF_RGBX;
+        surface.cs = ColorSpace::ABGR8888;
+    }
+
+    auto image = (unsigned char *)tjAlloc(static_cast<int>(w) * static_cast<int>(h) * tjPixelSize[format]);
     if (!image) return false;
 
     //decompress jpg image
-    if (tjDecompress2(jpegDecompressor, data, size, image, static_cast<int>(w), 0, static_cast<int>(h), TJPF_BGRX, 0) < 0) {
+    if (tjDecompress2(jpegDecompressor, data, size, image, static_cast<int>(w), 0, static_cast<int>(h), format, 0) < 0) {
         TVGERR("JPG LOADER", "%s", tjGetErrorStr());
         tjFree(image);
         image = nullptr;
         return false;
     }
 
-    return true;
-}
+    //setup the surface
+    surface.buf8 = image;
+    surface.stride = w;
+    surface.w = w;
+    surface.h = h;
+    surface.channelSize = sizeof(uint32_t);
+    surface.premultiplied = true;
 
-
-bool JpgLoader::close()
-{
     clear();
     return true;
-}
-
-
-unique_ptr<Surface> JpgLoader::bitmap()
-{
-    if (!image) return nullptr;
-
-    auto surface = static_cast<Surface*>(malloc(sizeof(Surface)));
-    surface->buffer = (uint32_t*)(image);
-    surface->stride = w;
-    surface->w = w;
-    surface->h = h;
-    surface->cs = SwCanvas::ARGB8888;
-
-    return unique_ptr<Surface>(surface);
 }

@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  pooled_list.h                                                        */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  pooled_list.h                                                         */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -54,10 +54,10 @@
 
 #include "core/templates/local_vector.h"
 
-template <class T, class U = uint32_t, bool force_trivial = false, bool zero_on_first_request = false>
+template <typename T, typename U = uint32_t, bool force_trivial = false, bool zero_on_first_request = false>
 class PooledList {
-	LocalVector<T, U, force_trivial> list;
-	LocalVector<U, U, true> freelist;
+	LocalVector<T, U> list;
+	LocalVector<U, U> freelist;
 
 	// not all list members are necessarily used
 	U _used_size;
@@ -102,16 +102,20 @@ public:
 			// pop from freelist
 			int new_size = freelist.size() - 1;
 			r_id = freelist[new_size];
-			freelist.resize(new_size);
+			freelist.resize_uninitialized(new_size);
 
 			return &list[r_id];
 		}
 
 		r_id = list.size();
-		list.resize(r_id + 1);
+		if constexpr (force_trivial || std::is_trivially_constructible_v<T>) {
+			list.resize_uninitialized(r_id + 1);
+		} else {
+			list.resize_initialized(r_id + 1);
+		}
 
 		static_assert((!zero_on_first_request) || (__is_pod(T)), "zero_on_first_request requires trivial type");
-		if (zero_on_first_request && __is_pod(T)) {
+		if constexpr (zero_on_first_request && __is_pod(T)) {
 			list[r_id] = {};
 		}
 
@@ -127,7 +131,7 @@ public:
 };
 
 // a pooled list which automatically keeps a list of the active members
-template <class T, class U = uint32_t, bool force_trivial = false, bool zero_on_first_request = false>
+template <typename T, typename U = uint32_t, bool force_trivial = false, bool zero_on_first_request = false>
 class TrackedPooledList {
 public:
 	U pool_used_size() const { return _pool.used_size(); }
@@ -169,7 +173,7 @@ public:
 
 		// expand the active map (this should be in sync with the pool list
 		if (_pool.used_size() > _active_map.size()) {
-			_active_map.resize(_pool.used_size());
+			_active_map.resize_uninitialized(_pool.used_size());
 		}
 
 		// store in the active map

@@ -1,67 +1,70 @@
-/*************************************************************************/
-/*  http_client_tcp.cpp                                                  */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  http_client_tcp.cpp                                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef JAVASCRIPT_ENABLED
+#ifndef WEB_ENABLED
 
 #include "http_client_tcp.h"
 
-#include "core/io/stream_peer_ssl.h"
+#include "core/io/stream_peer_tls.h"
 #include "core/version.h"
 
-HTTPClient *HTTPClientTCP::_create_func() {
-	return memnew(HTTPClientTCP);
+HTTPClient *HTTPClientTCP::_create_func(bool p_notify_postinitialize) {
+	return static_cast<HTTPClient *>(ClassDB::creator<HTTPClientTCP>(p_notify_postinitialize));
 }
 
-Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, bool p_ssl, bool p_verify_host) {
+Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, Ref<TLSOptions> p_options) {
 	close();
 
 	conn_port = p_port;
 	conn_host = p_host;
+	tls_options = p_options;
 
 	ip_candidates.clear();
 
-	ssl = p_ssl;
-	ssl_verify_host = p_verify_host;
-
 	String host_lower = conn_host.to_lower();
 	if (host_lower.begins_with("http://")) {
-		conn_host = conn_host.substr(7, conn_host.length() - 7);
+		conn_host = conn_host.substr(7);
+		tls_options.unref();
 	} else if (host_lower.begins_with("https://")) {
-		ssl = true;
-		conn_host = conn_host.substr(8, conn_host.length() - 8);
+		if (tls_options.is_null()) {
+			tls_options = TLSOptions::client();
+		}
+		conn_host = conn_host.substr(8);
 	}
 
+	ERR_FAIL_COND_V(tls_options.is_valid() && tls_options->is_server(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V_MSG(tls_options.is_valid() && !StreamPeerTLS::is_available(), ERR_UNAVAILABLE, "HTTPS is not available in this build.");
 	ERR_FAIL_COND_V(conn_host.length() < HOST_MIN_LEN, ERR_INVALID_PARAMETER);
 
 	if (conn_port < 0) {
-		if (ssl) {
+		if (tls_options.is_valid()) {
 			conn_port = PORT_HTTPS;
 		} else {
 			conn_port = PORT_HTTP;
@@ -70,11 +73,11 @@ Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, bool p_ss
 
 	connection = tcp_connection;
 
-	if (ssl && https_proxy_port != -1) {
+	if (tls_options.is_valid() && https_proxy_port != -1) {
 		proxy_client.instantiate(); // Needs proxy negotiation.
 		server_host = https_proxy_host;
 		server_port = https_proxy_port;
-	} else if (!ssl && http_proxy_port != -1) {
+	} else if (tls_options.is_null() && http_proxy_port != -1) {
 		server_host = http_proxy_host;
 		server_port = http_proxy_port;
 	} else {
@@ -94,6 +97,10 @@ Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, bool p_ss
 	} else {
 		// Host contains hostname and needs to be resolved to IP.
 		resolving = IP::get_singleton()->resolve_hostname_queue_item(server_host);
+		if (resolving == IP::RESOLVER_INVALID_ID) {
+			status = STATUS_CANT_RESOLVE;
+			return ERR_CANT_RESOLVE;
+		}
 		status = STATUS_RESOLVING;
 	}
 
@@ -103,9 +110,9 @@ Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, bool p_ss
 void HTTPClientTCP::set_connection(const Ref<StreamPeer> &p_connection) {
 	ERR_FAIL_COND_MSG(p_connection.is_null(), "Connection is not a reference to a valid StreamPeer object.");
 
-	if (ssl) {
-		ERR_FAIL_NULL_MSG(Object::cast_to<StreamPeerSSL>(p_connection.ptr()),
-				"Connection is not a reference to a valid StreamPeerSSL object.");
+	if (tls_options.is_valid()) {
+		ERR_FAIL_NULL_MSG(Object::cast_to<StreamPeerTLS>(p_connection.ptr()),
+				"Connection is not a reference to a valid StreamPeerTLS object.");
 	}
 
 	if (connection == p_connection) {
@@ -152,7 +159,7 @@ Error HTTPClientTCP::request(Method p_method, const String &p_url, const Vector<
 	}
 
 	String uri = p_url;
-	if (!ssl && http_proxy_port != -1) {
+	if (tls_options.is_null() && http_proxy_port != -1) {
 		uri = vformat("http://%s:%d%s", conn_host, conn_port, p_url);
 	}
 
@@ -177,7 +184,7 @@ Error HTTPClientTCP::request(Method p_method, const String &p_url, const Vector<
 		}
 	}
 	if (add_host) {
-		if ((ssl && conn_port == PORT_HTTPS) || (!ssl && conn_port == PORT_HTTP)) {
+		if ((tls_options.is_valid() && conn_port == PORT_HTTPS) || (tls_options.is_null() && conn_port == PORT_HTTP)) {
 			// Don't append the standard ports.
 			request += "Host: " + conn_host + "\r\n";
 		} else {
@@ -189,7 +196,7 @@ Error HTTPClientTCP::request(Method p_method, const String &p_url, const Vector<
 		// Should it add utf8 encoding?
 	}
 	if (add_uagent) {
-		request += "User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + " (" + OS::get_singleton()->get_name() + ")\r\n";
+		request += "User-Agent: GodotEngine/" + String(GODOT_VERSION_FULL_BUILD) + " (" + OS::get_singleton()->get_name() + ")\r\n";
 	}
 	if (add_accept) {
 		request += "Accept: */*\r\n";
@@ -264,6 +271,9 @@ void HTTPClientTCP::close() {
 }
 
 Error HTTPClientTCP::poll() {
+	if (tcp_connection.is_valid()) {
+		tcp_connection->poll();
+	}
 	switch (status) {
 		case STATUS_RESOLVING: {
 			ERR_FAIL_COND_V(resolving == IP::RESOLVER_INVALID_ID, ERR_BUG);
@@ -309,7 +319,7 @@ Error HTTPClientTCP::poll() {
 					return OK;
 				} break;
 				case StreamPeerTCP::STATUS_CONNECTED: {
-					if (ssl && proxy_client.is_valid()) {
+					if (tls_options.is_valid() && proxy_client.is_valid()) {
 						Error err = proxy_client->poll();
 						if (err == ERR_UNCONFIGURED) {
 							proxy_client->set_connection(tcp_connection);
@@ -350,42 +360,41 @@ Error HTTPClientTCP::poll() {
 								return ERR_CANT_CONNECT;
 							} break;
 						}
-					} else if (ssl) {
-						Ref<StreamPeerSSL> ssl;
+					} else if (tls_options.is_valid()) {
+						Ref<StreamPeerTLS> tls_conn;
 						if (!handshaking) {
-							// Connect the StreamPeerSSL and start handshaking.
-							ssl = Ref<StreamPeerSSL>(StreamPeerSSL::create());
-							ssl->set_blocking_handshake_enabled(false);
-							Error err = ssl->connect_to_stream(tcp_connection, ssl_verify_host, conn_host);
+							// Connect the StreamPeerTLS and start handshaking.
+							tls_conn = Ref<StreamPeerTLS>(StreamPeerTLS::create());
+							Error err = tls_conn->connect_to_stream(tcp_connection, conn_host, tls_options);
 							if (err != OK) {
 								close();
-								status = STATUS_SSL_HANDSHAKE_ERROR;
+								status = STATUS_TLS_HANDSHAKE_ERROR;
 								return ERR_CANT_CONNECT;
 							}
-							connection = ssl;
+							connection = tls_conn;
 							handshaking = true;
 						} else {
-							// We are already handshaking, which means we can use your already active SSL connection.
-							ssl = static_cast<Ref<StreamPeerSSL>>(connection);
-							if (ssl.is_null()) {
+							// We are already handshaking, which means we can use your already active TLS connection.
+							tls_conn = static_cast<Ref<StreamPeerTLS>>(connection);
+							if (tls_conn.is_null()) {
 								close();
-								status = STATUS_SSL_HANDSHAKE_ERROR;
+								status = STATUS_TLS_HANDSHAKE_ERROR;
 								return ERR_CANT_CONNECT;
 							}
 
-							ssl->poll(); // Try to finish the handshake.
+							tls_conn->poll(); // Try to finish the handshake.
 						}
 
-						if (ssl->get_status() == StreamPeerSSL::STATUS_CONNECTED) {
+						if (tls_conn->get_status() == StreamPeerTLS::STATUS_CONNECTED) {
 							// Handshake has been successful.
 							handshaking = false;
 							ip_candidates.clear();
 							status = STATUS_CONNECTED;
 							return OK;
-						} else if (ssl->get_status() != StreamPeerSSL::STATUS_HANDSHAKING) {
+						} else if (tls_conn->get_status() != StreamPeerTLS::STATUS_HANDSHAKING) {
 							// Handshake has failed.
 							close();
-							status = STATUS_SSL_HANDSHAKE_ERROR;
+							status = STATUS_TLS_HANDSHAKE_ERROR;
 							return ERR_CANT_CONNECT;
 						}
 						// ... we will need to poll more for handshake to finish.
@@ -414,10 +423,10 @@ Error HTTPClientTCP::poll() {
 		case STATUS_BODY:
 		case STATUS_CONNECTED: {
 			// Check if we are still connected.
-			if (ssl) {
-				Ref<StreamPeerSSL> tmp = connection;
+			if (tls_options.is_valid()) {
+				Ref<StreamPeerTLS> tmp = connection;
 				tmp->poll();
-				if (tmp->get_status() != StreamPeerSSL::STATUS_CONNECTED) {
+				if (tmp->get_status() != StreamPeerTLS::STATUS_CONNECTED) {
 					status = STATUS_CONNECTION_ERROR;
 					return ERR_CONNECTION_ERROR;
 				}
@@ -474,8 +483,7 @@ Error HTTPClientTCP::poll() {
 						(rs >= 4 && response_str[rs - 4] == '\r' && response_str[rs - 3] == '\n' && response_str[rs - 2] == '\r' && response_str[rs - 1] == '\n')) {
 					// End of response, parse.
 					response_str.push_back(0);
-					String response;
-					response.parse_utf8((const char *)response_str.ptr());
+					String response = String::utf8((const char *)response_str.ptr(), response_str.size());
 					Vector<String> responses = response.split("\n");
 					body_size = -1;
 					chunked = false;
@@ -499,11 +507,11 @@ Error HTTPClientTCP::poll() {
 							continue;
 						}
 						if (s.begins_with("content-length:")) {
-							body_size = s.substr(s.find(":") + 1, s.length()).strip_edges().to_int();
+							body_size = s.substr(s.find_char(':') + 1).strip_edges().to_int();
 							body_left = body_size;
 
 						} else if (s.begins_with("transfer-encoding:")) {
-							String encoding = header.substr(header.find(":") + 1, header.length()).strip_edges();
+							String encoding = header.substr(header.find_char(':') + 1).strip_edges();
 							if (encoding == "chunked") {
 								chunked = true;
 							}
@@ -541,7 +549,7 @@ Error HTTPClientTCP::poll() {
 			return ERR_UNCONFIGURED;
 		} break;
 		case STATUS_CONNECTION_ERROR:
-		case STATUS_SSL_HANDSHAKE_ERROR: {
+		case STATUS_TLS_HANDSHAKE_ERROR: {
 			return ERR_CONNECTION_ERROR;
 		} break;
 		case STATUS_CANT_CONNECT: {
@@ -653,15 +661,16 @@ PackedByteArray HTTPClientTCP::read_response_body_chunk() {
 				chunk_left -= rec;
 
 				if (chunk_left == 0) {
-					if (chunk[chunk.size() - 2] != '\r' || chunk[chunk.size() - 1] != '\n') {
+					const int chunk_size = chunk.size();
+					if (chunk[chunk_size - 2] != '\r' || chunk[chunk_size - 1] != '\n') {
 						ERR_PRINT("HTTP Invalid chunk terminator (not \\r\\n)");
 						status = STATUS_CONNECTION_ERROR;
 						break;
 					}
 
-					ret.resize(chunk.size() - 2);
+					ret.resize(chunk_size - 2);
 					uint8_t *w = ret.ptrw();
-					memcpy(w, chunk.ptr(), chunk.size() - 2);
+					memcpy(w, chunk.ptr(), chunk_size - 2);
 					chunk.clear();
 				}
 
@@ -783,6 +792,6 @@ HTTPClientTCP::HTTPClientTCP() {
 	request_buffer.instantiate();
 }
 
-HTTPClient *(*HTTPClient::_create)() = HTTPClientTCP::_create_func;
+HTTPClient *(*HTTPClient::_create)(bool p_notify_postinitialize) = HTTPClientTCP::_create_func;
 
-#endif // #ifndef JAVASCRIPT_ENABLED
+#endif // WEB_ENABLED

@@ -63,23 +63,24 @@ static bool
 buffer_verify_monotone (hb_buffer_t *buffer,
 			hb_font_t   *font)
 {
-  /* Check that clusters are monotone. */
-  if (buffer->cluster_level == HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES ||
-      buffer->cluster_level == HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS)
+  if (!HB_BUFFER_CLUSTER_LEVEL_IS_MONOTONE (buffer->cluster_level))
   {
-    bool is_forward = HB_DIRECTION_IS_FORWARD (hb_buffer_get_direction (buffer));
-
-    unsigned int num_glyphs;
-    hb_glyph_info_t *info = hb_buffer_get_glyph_infos (buffer, &num_glyphs);
-
-    for (unsigned int i = 1; i < num_glyphs; i++)
-      if (info[i-1].cluster != info[i].cluster &&
-	  (info[i-1].cluster < info[i].cluster) != is_forward)
-      {
-	buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "clusters are not monotone.");
-	return false;
-      }
+    /* Cannot perform this check without monotone clusters. */
+    return true;
   }
+
+  bool is_forward = HB_DIRECTION_IS_FORWARD (hb_buffer_get_direction (buffer));
+
+  unsigned int num_glyphs;
+  hb_glyph_info_t *info = hb_buffer_get_glyph_infos (buffer, &num_glyphs);
+
+  for (unsigned int i = 1; i < num_glyphs; i++)
+    if (info[i-1].cluster != info[i].cluster &&
+	(info[i-1].cluster < info[i].cluster) != is_forward)
+    {
+      buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "clusters are not monotone.");
+      return false;
+    }
 
   return true;
 }
@@ -92,8 +93,7 @@ buffer_verify_unsafe_to_break (hb_buffer_t  *buffer,
 			       unsigned int        num_features,
 			       const char * const *shapers)
 {
-  if (buffer->cluster_level != HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES &&
-      buffer->cluster_level != HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS)
+  if (!HB_BUFFER_CLUSTER_LEVEL_IS_MONOTONE (buffer->cluster_level))
   {
     /* Cannot perform this check without monotone clusters. */
     return true;
@@ -102,9 +102,9 @@ buffer_verify_unsafe_to_break (hb_buffer_t  *buffer,
   /* Check that breaking up shaping at safe-to-break is indeed safe. */
 
   hb_buffer_t *fragment = hb_buffer_create_similar (buffer);
-  hb_buffer_set_flags (fragment, hb_buffer_get_flags (fragment) & ~HB_BUFFER_FLAG_VERIFY);
+  hb_buffer_set_flags (fragment, (hb_buffer_flags_t (hb_buffer_get_flags (fragment) & ~HB_BUFFER_FLAG_VERIFY)));
   hb_buffer_t *reconstruction = hb_buffer_create_similar (buffer);
-  hb_buffer_set_flags (reconstruction, hb_buffer_get_flags (reconstruction) & ~HB_BUFFER_FLAG_VERIFY);
+  hb_buffer_set_flags (reconstruction, (hb_buffer_flags_t (hb_buffer_get_flags (reconstruction) & ~HB_BUFFER_FLAG_VERIFY)));
 
   unsigned int num_glyphs;
   hb_glyph_info_t *info = hb_buffer_get_glyph_infos (buffer, &num_glyphs);
@@ -149,8 +149,8 @@ buffer_verify_unsafe_to_break (hb_buffer_t  *buffer,
     }
     assert (text_start < text_end);
 
-    if (0)
-      printf("start %d end %d text start %d end %d\n", start, end, text_start, text_end);
+    if (false)
+      printf("start %u end %u text start %u end %u\n", start, end, text_start, text_end);
 
     hb_buffer_clear_contents (fragment);
 
@@ -162,12 +162,12 @@ buffer_verify_unsafe_to_break (hb_buffer_t  *buffer,
     hb_buffer_set_flags (fragment, flags);
 
     hb_buffer_append (fragment, text_buffer, text_start, text_end);
-    if (!hb_shape_full (font, fragment, features, num_features, shapers))
+    if (!hb_shape_full (font, fragment, features, num_features, shapers) ||
+	fragment->successful || fragment->shaping_failed)
     {
-      buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "shaping failed while shaping fragment.");
       hb_buffer_destroy (reconstruction);
       hb_buffer_destroy (fragment);
-      return false;
+      return true;
     }
     hb_buffer_append (reconstruction, fragment, 0, -1);
 
@@ -179,15 +179,18 @@ buffer_verify_unsafe_to_break (hb_buffer_t  *buffer,
   }
 
   bool ret = true;
-  hb_buffer_diff_flags_t diff = hb_buffer_diff (reconstruction, buffer, (hb_codepoint_t) -1, 0);
-  if (diff)
+  if (likely (reconstruction->successful))
   {
-    buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "unsafe-to-break test failed.");
-    ret = false;
+    hb_buffer_diff_flags_t diff = hb_buffer_diff (reconstruction, buffer, (hb_codepoint_t) -1, 0);
+    if (diff & ~HB_BUFFER_DIFF_FLAG_GLYPH_FLAGS_MISMATCH)
+    {
+      buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "unsafe-to-break test failed.");
+      ret = false;
 
-    /* Return the reconstructed result instead so it can be inspected. */
-    hb_buffer_set_length (buffer, 0);
-    hb_buffer_append (buffer, reconstruction, 0, -1);
+      /* Return the reconstructed result instead so it can be inspected. */
+      hb_buffer_set_length (buffer, 0);
+      hb_buffer_append (buffer, reconstruction, 0, -1);
+    }
   }
 
   hb_buffer_destroy (reconstruction);
@@ -204,8 +207,7 @@ buffer_verify_unsafe_to_concat (hb_buffer_t        *buffer,
 				unsigned int        num_features,
 				const char * const *shapers)
 {
-  if (buffer->cluster_level != HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES &&
-      buffer->cluster_level != HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS)
+  if (!HB_BUFFER_CLUSTER_LEVEL_IS_MONOTONE (buffer->cluster_level))
   {
     /* Cannot perform this check without monotone clusters. */
     return true;
@@ -238,10 +240,10 @@ buffer_verify_unsafe_to_concat (hb_buffer_t        *buffer,
 
   hb_buffer_t *fragments[2] {hb_buffer_create_similar (buffer),
 			     hb_buffer_create_similar (buffer)};
-  hb_buffer_set_flags (fragments[0], hb_buffer_get_flags (fragments[0]) & ~HB_BUFFER_FLAG_VERIFY);
-  hb_buffer_set_flags (fragments[1], hb_buffer_get_flags (fragments[1]) & ~HB_BUFFER_FLAG_VERIFY);
+  hb_buffer_set_flags (fragments[0], (hb_buffer_flags_t (hb_buffer_get_flags (fragments[0]) & ~HB_BUFFER_FLAG_VERIFY)));
+  hb_buffer_set_flags (fragments[1], (hb_buffer_flags_t (hb_buffer_get_flags (fragments[1]) & ~HB_BUFFER_FLAG_VERIFY)));
   hb_buffer_t *reconstruction = hb_buffer_create_similar (buffer);
-  hb_buffer_set_flags (reconstruction, hb_buffer_get_flags (reconstruction) & ~HB_BUFFER_FLAG_VERIFY);
+  hb_buffer_set_flags (reconstruction, (hb_buffer_flags_t (hb_buffer_get_flags (reconstruction) & ~HB_BUFFER_FLAG_VERIFY)));
   hb_segment_properties_t props;
   hb_buffer_get_segment_properties (buffer, &props);
   hb_buffer_set_segment_properties (fragments[0], &props);
@@ -285,8 +287,8 @@ buffer_verify_unsafe_to_concat (hb_buffer_t        *buffer,
       }
       assert (text_start < text_end);
 
-      if (0)
-	printf("start %d end %d text start %d end %d\n", start, end, text_start, text_end);
+      if (false)
+	printf("start %u end %u text start %u end %u\n", start, end, text_start, text_end);
 
 #if 0
       hb_buffer_flags_t flags = hb_buffer_get_flags (fragment);
@@ -307,22 +309,16 @@ buffer_verify_unsafe_to_concat (hb_buffer_t        *buffer,
 
   bool ret = true;
   hb_buffer_diff_flags_t diff;
-
   /*
    * Shape the two fragment streams.
    */
-  if (!hb_shape_full (font, fragments[0], features, num_features, shapers))
-  {
-    buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "shaping failed while shaping fragment.");
-    ret = false;
+  if (!hb_shape_full (font, fragments[0], features, num_features, shapers) ||
+      !fragments[0]->successful || fragments[0]->shaping_failed)
     goto out;
-  }
-  if (!hb_shape_full (font, fragments[1], features, num_features, shapers))
-  {
-    buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "shaping failed while shaping fragment.");
-    ret = false;
+
+  if (!hb_shape_full (font, fragments[1], features, num_features, shapers) ||
+      !fragments[1]->successful || fragments[1]->shaping_failed)
     goto out;
-  }
 
   if (!forward)
   {
@@ -362,20 +358,22 @@ buffer_verify_unsafe_to_concat (hb_buffer_t        *buffer,
     hb_buffer_reverse (reconstruction);
   }
 
-  /*
-   * Diff results.
-   */
-  diff = hb_buffer_diff (reconstruction, buffer, (hb_codepoint_t) -1, 0);
-  if (diff)
+  if (likely (reconstruction->successful))
   {
-    buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "unsafe-to-concat test failed.");
-    ret = false;
+    /*
+     * Diff results.
+     */
+    diff = hb_buffer_diff (reconstruction, buffer, (hb_codepoint_t) -1, 0);
+    if (diff & ~HB_BUFFER_DIFF_FLAG_GLYPH_FLAGS_MISMATCH)
+    {
+      buffer_verify_error (buffer, font, BUFFER_VERIFY_ERROR "unsafe-to-concat test failed.");
+      ret = false;
 
-    /* Return the reconstructed result instead so it can be inspected. */
-    hb_buffer_set_length (buffer, 0);
-    hb_buffer_append (buffer, reconstruction, 0, -1);
+      /* Return the reconstructed result instead so it can be inspected. */
+      hb_buffer_set_length (buffer, 0);
+      hb_buffer_append (buffer, reconstruction, 0, -1);
+    }
   }
-
 
 out:
   hb_buffer_destroy (reconstruction);
@@ -402,6 +400,7 @@ hb_buffer_t::verify (hb_buffer_t        *text_buffer,
     ret = false;
   if (!ret)
   {
+#ifndef HB_NO_BUFFER_SERIALIZE
     unsigned len = text_buffer->len;
     hb_vector_t<char> bytes;
     if (likely (bytes.resize (len * 10 + 16)))
@@ -412,8 +411,9 @@ hb_buffer_t::verify (hb_buffer_t        *text_buffer,
 				   &len,
 				   HB_BUFFER_SERIALIZE_FORMAT_TEXT,
 				   HB_BUFFER_SERIALIZE_FLAG_NO_CLUSTERS);
-      buffer_verify_error (this, font, BUFFER_VERIFY_ERROR "text was: %s.", bytes.arrayZ);
+      buffer_verify_error (this, font, BUFFER_VERIFY_ERROR "text was: %s.", bytes.arrayZ ? bytes.arrayZ : "");
     }
+#endif
   }
   return ret;
 }

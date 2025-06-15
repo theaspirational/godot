@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  packet_peer.cpp                                                      */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  packet_peer.cpp                                                       */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "packet_peer.h"
 
@@ -38,7 +38,7 @@
 void PacketPeer::set_encode_buffer_max_size(int p_max_size) {
 	ERR_FAIL_COND_MSG(p_max_size < 1024, "Max encode buffer must be at least 1024 bytes");
 	ERR_FAIL_COND_MSG(p_max_size > 256 * 1024 * 1024, "Max encode buffer cannot exceed 256 MiB");
-	encode_buffer_max_size = next_power_of_2(p_max_size);
+	encode_buffer_max_size = next_power_of_2((uint32_t)p_max_size);
 	encode_buffer.clear();
 }
 
@@ -103,7 +103,7 @@ Error PacketPeer::put_var(const Variant &p_packet, bool p_full_objects) {
 
 	if (unlikely(encode_buffer.size() < len)) {
 		encode_buffer.resize(0); // Avoid realloc
-		encode_buffer.resize(next_power_of_2(len));
+		encode_buffer.resize(next_power_of_2((uint32_t)len));
 	}
 
 	uint8_t *w = encode_buffer.ptrw();
@@ -152,40 +152,22 @@ void PacketPeer::_bind_methods() {
 
 /***************/
 
-int PacketPeerExtension::get_available_packet_count() const {
-	int count;
-	if (GDVIRTUAL_CALL(_get_available_packet_count, count)) {
-		return count;
-	}
-	WARN_PRINT_ONCE("PacketPeerExtension::_get_available_packet_count is unimplemented!");
-	return -1;
-}
-
 Error PacketPeerExtension::get_packet(const uint8_t **r_buffer, int &r_buffer_size) {
-	int err;
+	Error err;
 	if (GDVIRTUAL_CALL(_get_packet, r_buffer, &r_buffer_size, err)) {
-		return (Error)err;
+		return err;
 	}
 	WARN_PRINT_ONCE("PacketPeerExtension::_get_packet_native is unimplemented!");
 	return FAILED;
 }
 
 Error PacketPeerExtension::put_packet(const uint8_t *p_buffer, int p_buffer_size) {
-	int err;
+	Error err;
 	if (GDVIRTUAL_CALL(_put_packet, p_buffer, p_buffer_size, err)) {
-		return (Error)err;
+		return err;
 	}
 	WARN_PRINT_ONCE("PacketPeerExtension::_put_packet_native is unimplemented!");
 	return FAILED;
-}
-
-int PacketPeerExtension::get_max_packet_size() const {
-	int size;
-	if (GDVIRTUAL_CALL(_get_max_packet_size, size)) {
-		return size;
-	}
-	WARN_PRINT_ONCE("PacketPeerExtension::_get_max_packet_size is unimplemented!");
-	return 0;
 }
 
 void PacketPeerExtension::_bind_methods() {
@@ -317,10 +299,10 @@ Ref<StreamPeer> PacketPeerStream::get_stream_peer() const {
 
 void PacketPeerStream::set_input_buffer_max_size(int p_max_size) {
 	ERR_FAIL_COND_MSG(p_max_size < 0, "Max size of input buffer size cannot be smaller than 0.");
-	//warning may lose packets
+	// WARNING: May lose packets.
 	ERR_FAIL_COND_MSG(ring_buffer.data_left(), "Buffer in use, resizing would cause loss of data.");
-	ring_buffer.resize(nearest_shift(next_power_of_2(p_max_size + 4)) - 1);
-	input_buffer.resize(next_power_of_2(p_max_size + 4));
+	ring_buffer.resize(nearest_shift(next_power_of_2((uint32_t)p_max_size + (uint32_t)4)) - 1);
+	input_buffer.resize(next_power_of_2((uint32_t)p_max_size + (uint32_t)4));
 }
 
 int PacketPeerStream::get_input_buffer_max_size() const {
@@ -328,7 +310,7 @@ int PacketPeerStream::get_input_buffer_max_size() const {
 }
 
 void PacketPeerStream::set_output_buffer_max_size(int p_max_size) {
-	output_buffer.resize(next_power_of_2(p_max_size + 4));
+	output_buffer.resize(next_power_of_2((uint32_t)p_max_size + (uint32_t)4));
 }
 
 int PacketPeerStream::get_output_buffer_max_size() const {
@@ -336,9 +318,9 @@ int PacketPeerStream::get_output_buffer_max_size() const {
 }
 
 PacketPeerStream::PacketPeerStream() {
-	int rbsize = GLOBAL_GET("network/limits/packet_peer_stream/max_buffer_po2");
+	int64_t rbsize = GLOBAL_GET("network/limits/packet_peer_stream/max_buffer_po2");
 
 	ring_buffer.resize(rbsize);
-	input_buffer.resize(1 << rbsize);
-	output_buffer.resize(1 << rbsize);
+	input_buffer.resize(int64_t(1) << rbsize);
+	output_buffer.resize(int64_t(1) << rbsize);
 }

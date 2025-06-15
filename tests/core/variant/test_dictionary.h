@@ -1,60 +1,39 @@
-/*************************************************************************/
-/*  test_dictionary.h                                                    */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_dictionary.h                                                     */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef TEST_DICTIONARY_H
-#define TEST_DICTIONARY_H
+#pragma once
 
-#include "core/variant/dictionary.h"
+#include "core/variant/typed_dictionary.h"
 #include "tests/test_macros.h"
 
 namespace TestDictionary {
-
-static inline Array build_array() {
-	return Array();
-}
-template <typename... Targs>
-static inline Array build_array(Variant item, Targs... Fargs) {
-	Array a = build_array(Fargs...);
-	a.push_front(item);
-	return a;
-}
-static inline Dictionary build_dictionary() {
-	return Dictionary();
-}
-template <typename... Targs>
-static inline Dictionary build_dictionary(Variant key, Variant item, Targs... Fargs) {
-	Dictionary d = build_dictionary(Fargs...);
-	d[key] = item;
-	return d;
-}
-
 TEST_CASE("[Dictionary] Assignment using bracket notation ([])") {
 	Dictionary map;
 	map["Hello"] = 0;
@@ -63,6 +42,18 @@ TEST_CASE("[Dictionary] Assignment using bracket notation ([])") {
 	CHECK(int(map["Hello"]) == 3);
 	map["World!"] = 4;
 	CHECK(int(map["World!"]) == 4);
+
+	map[StringName("HelloName")] = 6;
+	CHECK(int(map[StringName("HelloName")]) == 6);
+	CHECK(int(map.find_key(6).get_type()) == Variant::STRING_NAME);
+	map[StringName("HelloName")] = 7;
+	CHECK(int(map[StringName("HelloName")]) == 7);
+
+	// Test String and StringName are equivalent.
+	map[StringName("Hello")] = 8;
+	CHECK(int(map["Hello"]) == 8);
+	map["Hello"] = 9;
+	CHECK(int(map[StringName("Hello")]) == 9);
 
 	// Test non-string keys, since keys can be of any Variant type.
 	map[12345] = -5;
@@ -75,21 +66,47 @@ TEST_CASE("[Dictionary] Assignment using bracket notation ([])") {
 	CHECK(int(map[0]) == 400);
 	// Check that assigning 0 doesn't overwrite the value for `false`.
 	CHECK(int(map[false]) == 128);
+
+	// Ensure read-only maps aren't modified by non-existing keys.
+	const int length = map.size();
+	map.make_read_only();
+	CHECK(int(map["This key does not exist"].get_type()) == Variant::NIL);
+	CHECK(map.size() == length);
 }
 
-TEST_CASE("[Dictionary] get_key_lists()") {
+TEST_CASE("[Dictionary] List init") {
+	Dictionary dict{
+		{ 0, "int" },
+		{ "packed_string_array", PackedStringArray({ "array", "of", "values" }) },
+		{ "key", Dictionary({ { "nested", 200 } }) },
+		{ Vector2(), "v2" },
+	};
+	CHECK(dict.size() == 4);
+	CHECK(dict[0] == "int");
+	CHECK(PackedStringArray(dict["packed_string_array"])[2] == "values");
+	CHECK(Dictionary(dict["key"])["nested"] == Variant(200));
+	CHECK(dict[Vector2()] == "v2");
+
+	TypedDictionary<double, double> tdict{
+		{ 0.0, 1.0 },
+		{ 5.0, 2.0 },
+	};
+	CHECK_EQ(tdict[0.0], Variant(1.0));
+	CHECK_EQ(tdict[5.0], Variant(2.0));
+}
+
+TEST_CASE("[Dictionary] get_key_list()") {
 	Dictionary map;
-	List<Variant> keys;
-	List<Variant> *ptr = &keys;
-	map.get_key_list(ptr);
+	LocalVector<Variant> keys;
+	keys = map.get_key_list();
 	CHECK(keys.is_empty());
 	map[1] = 3;
-	map.get_key_list(ptr);
+	keys = map.get_key_list();
 	CHECK(keys.size() == 1);
 	CHECK(int(keys[0]) == 1);
 	map[2] = 4;
-	map.get_key_list(ptr);
-	CHECK(keys.size() == 3);
+	keys = map.get_key_list();
+	CHECK(keys.size() == 2);
 }
 
 TEST_CASE("[Dictionary] get_key_at_index()") {
@@ -165,9 +182,13 @@ TEST_CASE("[Dictionary] keys() and values()") {
 
 TEST_CASE("[Dictionary] Duplicate dictionary") {
 	// d = {1: {1: 1}, {2: 2}: [2], [3]: 3}
-	Dictionary k2 = build_dictionary(2, 2);
-	Array k3 = build_array(3);
-	Dictionary d = build_dictionary(1, build_dictionary(1, 1), k2, build_array(2), k3, 3);
+	Dictionary k2 = { { 2, 2 } };
+	Array k3 = { 3 };
+	Dictionary d = {
+		{ 1, Dictionary({ { 1, 1 } }) },
+		{ k2, Array({ 2 }) },
+		{ k3, 3 }
+	};
 
 	// Deep copy
 	Dictionary deep_d = d.duplicate(true);
@@ -285,9 +306,13 @@ TEST_CASE("[Dictionary] Duplicate recursive dictionary on keys") {
 
 TEST_CASE("[Dictionary] Hash dictionary") {
 	// d = {1: {1: 1}, {2: 2}: [2], [3]: 3}
-	Dictionary k2 = build_dictionary(2, 2);
-	Array k3 = build_array(3);
-	Dictionary d = build_dictionary(1, build_dictionary(1, 1), k2, build_array(2), k3, 3);
+	Dictionary k2 = { { 2, 2 } };
+	Array k3 = { 3 };
+	Dictionary d = {
+		{ 1, Dictionary({ { 1, 1 } }) },
+		{ k2, Array({ 2 }) },
+		{ k3, 3 }
+	};
 	uint32_t original_hash = d.hash();
 
 	// Modify dict change the hash
@@ -357,9 +382,9 @@ TEST_CASE("[Dictionary] Empty comparison") {
 }
 
 TEST_CASE("[Dictionary] Flat comparison") {
-	Dictionary d1 = build_dictionary(1, 1);
-	Dictionary d2 = build_dictionary(1, 1);
-	Dictionary other_d = build_dictionary(2, 1);
+	Dictionary d1 = { { 1, 1 } };
+	Dictionary d2 = { { 1, 1 } };
+	Dictionary other_d = { { 2, 1 } };
 
 	// test both operator== and operator!=
 	CHECK_EQ(d1, d1); // compare self
@@ -372,12 +397,12 @@ TEST_CASE("[Dictionary] Flat comparison") {
 
 TEST_CASE("[Dictionary] Nested dictionary comparison") {
 	// d1 = {1: {2: {3: 4}}}
-	Dictionary d1 = build_dictionary(1, build_dictionary(2, build_dictionary(3, 4)));
+	Dictionary d1 = { { 1, Dictionary({ { 2, Dictionary({ { 3, 4 } }) } }) } };
 
 	Dictionary d2 = d1.duplicate(true);
 
 	// other_d = {1: {2: {3: 0}}}
-	Dictionary other_d = build_dictionary(1, build_dictionary(2, build_dictionary(3, 0)));
+	Dictionary other_d = { { 1, Dictionary({ { 2, Dictionary({ { 3, 0 } }) } }) } };
 
 	// test both operator== and operator!=
 	CHECK_EQ(d1, d1); // compare self
@@ -390,12 +415,12 @@ TEST_CASE("[Dictionary] Nested dictionary comparison") {
 
 TEST_CASE("[Dictionary] Nested array comparison") {
 	// d1 = {1: [2, 3]}
-	Dictionary d1 = build_dictionary(1, build_array(2, 3));
+	Dictionary d1 = { { 1, { 2, 3 } } };
 
 	Dictionary d2 = d1.duplicate(true);
 
 	// other_d = {1: [2, 0]}
-	Dictionary other_d = build_dictionary(1, build_array(2, 0));
+	Dictionary other_d = { { 1, { 2, 0 } } };
 
 	// test both operator== and operator!=
 	CHECK_EQ(d1, d1); // compare self
@@ -500,6 +525,96 @@ TEST_CASE("[Dictionary] Recursive self comparison") {
 	d2.clear();
 }
 
-} // namespace TestDictionary
+TEST_CASE("[Dictionary] Order and find") {
+	Dictionary d;
+	d[4] = "four";
+	d[8] = "eight";
+	d[12] = "twelve";
+	d["4"] = "four";
 
-#endif // TEST_DICTIONARY_H
+	Array keys = { 4, 8, 12, "4" };
+
+	CHECK_EQ(d.keys(), keys);
+	CHECK_EQ(d.find_key("four"), Variant(4));
+	CHECK_EQ(d.find_key("does not exist"), Variant());
+}
+
+TEST_CASE("[Dictionary] Typed copying") {
+	TypedDictionary<int, int> d1;
+	d1[0] = 1;
+
+	TypedDictionary<double, double> d2;
+	d2[0] = 1.0;
+
+	Dictionary d3 = d1;
+	TypedDictionary<int, int> d4 = d3;
+
+	Dictionary d5 = d2;
+	TypedDictionary<int, int> d6 = d5;
+
+	d3[0] = 2;
+	d4[0] = 3;
+
+	// Same typed TypedDictionary should be shared.
+	CHECK_EQ(d1[0], Variant(3));
+	CHECK_EQ(d3[0], Variant(3));
+	CHECK_EQ(d4[0], Variant(3));
+
+	d5[0] = 2.0;
+	d6[0] = 3.0;
+
+	// Different typed TypedDictionary should not be shared.
+	CHECK_EQ(d2[0], Variant(2.0));
+	CHECK_EQ(d5[0], Variant(2.0));
+	CHECK_EQ(d6[0], Variant(3.0));
+
+	d1.clear();
+	d2.clear();
+	d3.clear();
+	d4.clear();
+	d5.clear();
+	d6.clear();
+}
+
+TEST_CASE("[Dictionary] Iteration") {
+	Dictionary a1 = { { 1, 2 }, { 3, 4 }, { 5, 6 } };
+	Dictionary a2 = { { 1, 2 }, { 3, 4 }, { 5, 6 } };
+
+	int idx = 0;
+
+	for (const KeyValue<Variant, Variant> &kv : (const Dictionary &)a1) {
+		CHECK_EQ(int(a2[kv.key]), int(kv.value));
+		idx++;
+	}
+
+	CHECK_EQ(idx, a1.size());
+
+	a1.clear();
+	a2.clear();
+}
+
+TEST_CASE("[Dictionary] Object value init") {
+	Object *a = memnew(Object);
+	Object *b = memnew(Object);
+	TypedDictionary<double, Object *> tdict = {
+		{ 0.0, a },
+		{ 5.0, b },
+	};
+	CHECK_EQ(tdict[0.0], Variant(a));
+	CHECK_EQ(tdict[5.0], Variant(b));
+	memdelete(a);
+	memdelete(b);
+}
+
+TEST_CASE("[Dictionary] RefCounted value init") {
+	Ref<RefCounted> a = memnew(RefCounted);
+	Ref<RefCounted> b = memnew(RefCounted);
+	TypedDictionary<double, Ref<RefCounted>> tdict = {
+		{ 0.0, a },
+		{ 5.0, b },
+	};
+	CHECK_EQ(tdict[0.0], Variant(a));
+	CHECK_EQ(tdict[5.0], Variant(b));
+}
+
+} // namespace TestDictionary

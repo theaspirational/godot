@@ -1,40 +1,39 @@
-/*************************************************************************/
-/*  translation_loader_po.cpp                                            */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  translation_loader_po.cpp                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "translation_loader_po.h"
 
 #include "core/io/file_access.h"
-#include "core/string/translation.h"
 #include "core/string/translation_po.h"
 
-RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
+Ref<Resource> TranslationLoaderPO::load_translation(Ref<FileAccess> f, Error *r_error) {
 	if (r_error) {
 		*r_error = ERR_FILE_CORRUPT;
 	}
@@ -49,9 +48,7 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 
 		uint16_t version_maj = f->get_16();
 		uint16_t version_min = f->get_16();
-		if (version_maj > 1) {
-			ERR_FAIL_V_MSG(RES(), vformat("Unsupported MO file %s, version %d.%d.", path, version_maj, version_min));
-		}
+		ERR_FAIL_COND_V_MSG(version_maj > 1, Ref<Resource>(), vformat("Unsupported MO file %s, version %d.%d.", path, version_maj, version_min));
 
 		uint32_t num_strings = f->get_32();
 		uint32_t id_table_offset = f->get_32();
@@ -79,14 +76,17 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 				bool is_plural = false;
 				for (uint32_t j = 0; j < str_len + 1; j++) {
 					if (data[j] == 0x04) {
-						msg_context.parse_utf8((const char *)data.ptr(), j);
+						msg_context.clear();
+						msg_context.append_utf8((const char *)data.ptr(), j);
 						str_start = j + 1;
 					}
 					if (data[j] == 0x00) {
 						if (is_plural) {
-							msg_id_plural.parse_utf8((const char *)(data.ptr() + str_start), j - str_start);
+							msg_id_plural.clear();
+							msg_id_plural.append_utf8((const char *)(data.ptr() + str_start), j - str_start);
 						} else {
-							msg_id.parse_utf8((const char *)(data.ptr() + str_start), j - str_start);
+							msg_id.clear();
+							msg_id.append_utf8((const char *)(data.ptr() + str_start), j - str_start);
 							is_plural = true;
 						}
 						str_start = j + 1;
@@ -111,7 +111,7 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 					// Record plural rule.
 					int p_start = config.find("Plural-Forms");
 					if (p_start != -1) {
-						int p_end = config.find("\n", p_start);
+						int p_end = config.find_char('\n', p_start);
 						translation->set_plural_rule(config.substr(p_start, p_end - p_start));
 					}
 				} else {
@@ -134,7 +134,6 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 			}
 		}
 
-		memdelete(f);
 	} else {
 		// Try to load as text PO file.
 		f->seek(0);
@@ -173,18 +172,14 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 			// If we reached last line and it's not a content line, break, otherwise let processing that last loop
 			if (is_eof && l.is_empty()) {
 				if (status == STATUS_READING_ID || status == STATUS_READING_CONTEXT || (status == STATUS_READING_PLURAL && plural_index != plural_forms - 1)) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected EOF while reading PO file at: " + path + ":" + itos(line));
+					ERR_FAIL_V_MSG(Ref<Resource>(), vformat("Unexpected EOF while reading PO file at: %s:%d.", path, line));
 				} else {
 					break;
 				}
 			}
 
 			if (l.begins_with("msgctxt")) {
-				if (status != STATUS_READING_STRING && status != STATUS_READING_PLURAL) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected 'msgctxt', was expecting 'msgid_plural' or 'msgstr' before 'msgctxt' while parsing: " + path + ":" + itos(line));
-				}
+				ERR_FAIL_COND_V_MSG(status != STATUS_READING_STRING && status != STATUS_READING_PLURAL, Ref<Resource>(), vformat("Unexpected 'msgctxt', was expecting 'msgid_plural' or 'msgstr' before 'msgctxt' while parsing: %s:%d.", path, line));
 
 				// In PO file, "msgctxt" appears before "msgid". If we encounter a "msgctxt", we add what we have read
 				// and set "entered_context" to true to prevent adding twice.
@@ -192,49 +187,38 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 					if (status == STATUS_READING_STRING) {
 						translation->add_message(msg_id, msg_str, msg_context);
 					} else if (status == STATUS_READING_PLURAL) {
-						if (plural_index != plural_forms - 1) {
-							memdelete(f);
-							ERR_FAIL_V_MSG(RES(), "Number of 'msgstr[]' doesn't match with number of plural forms: " + path + ":" + itos(line));
-						}
+						ERR_FAIL_COND_V_MSG(plural_index != plural_forms - 1, Ref<Resource>(), vformat("Number of 'msgstr[]' doesn't match with number of plural forms: %s:%d.", path, line));
 						translation->add_plural_message(msg_id, msgs_plural, msg_context);
 					}
 				}
 				msg_context = "";
-				l = l.substr(7, l.length()).strip_edges();
+				l = l.substr(7).strip_edges();
 				status = STATUS_READING_CONTEXT;
 				entered_context = true;
 			}
 
 			if (l.begins_with("msgid_plural")) {
 				if (plural_forms == 0) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "PO file uses 'msgid_plural' but 'Plural-Forms' is invalid or missing in header: " + path + ":" + itos(line));
+					ERR_FAIL_V_MSG(Ref<Resource>(), vformat("PO file uses 'msgid_plural' but 'Plural-Forms' is invalid or missing in header: %s:%d.", path, line));
 				} else if (status != STATUS_READING_ID) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected 'msgid_plural', was expecting 'msgid' before 'msgid_plural' while parsing: " + path + ":" + itos(line));
+					ERR_FAIL_V_MSG(Ref<Resource>(), vformat("Unexpected 'msgid_plural', was expecting 'msgid' before 'msgid_plural' while parsing: %s:%d.", path, line));
 				}
 				// We don't record the message in "msgid_plural" itself as tr_n(), TTRN(), RTRN() interfaces provide the plural string already.
 				// We just have to reset variables related to plurals for "msgstr[]" later on.
-				l = l.substr(12, l.length()).strip_edges();
+				l = l.substr(12).strip_edges();
 				plural_index = -1;
 				msgs_plural.clear();
 				msgs_plural.resize(plural_forms);
 				status = STATUS_READING_PLURAL;
 			} else if (l.begins_with("msgid")) {
-				if (status == STATUS_READING_ID) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected 'msgid', was expecting 'msgstr' while parsing: " + path + ":" + itos(line));
-				}
+				ERR_FAIL_COND_V_MSG(status == STATUS_READING_ID, Ref<Resource>(), vformat("Unexpected 'msgid', was expecting 'msgstr' while parsing: %s:%d.", path, line));
 
 				if (!msg_id.is_empty()) {
 					if (!skip_this && !entered_context) {
 						if (status == STATUS_READING_STRING) {
 							translation->add_message(msg_id, msg_str, msg_context);
 						} else if (status == STATUS_READING_PLURAL) {
-							if (plural_index != plural_forms - 1) {
-								memdelete(f);
-								ERR_FAIL_V_MSG(RES(), "Number of 'msgstr[]' doesn't match with number of plural forms: " + path + ":" + itos(line));
-							}
+							ERR_FAIL_COND_V_MSG(plural_index != plural_forms - 1, Ref<Resource>(), vformat("Number of 'msgstr[]' doesn't match with number of plural forms: %s:%d.", path, line));
 							translation->add_plural_message(msg_id, msgs_plural, msg_context);
 						}
 					}
@@ -243,13 +227,13 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 					// Record plural rule.
 					int p_start = config.find("Plural-Forms");
 					if (p_start != -1) {
-						int p_end = config.find("\n", p_start);
+						int p_end = config.find_char('\n', p_start);
 						translation->set_plural_rule(config.substr(p_start, p_end - p_start));
 						plural_forms = translation->get_plural_forms();
 					}
 				}
 
-				l = l.substr(5, l.length()).strip_edges();
+				l = l.substr(5).strip_edges();
 				status = STATUS_READING_ID;
 				// If we did not encounter msgctxt, we reset context to empty to reset it.
 				if (!entered_context) {
@@ -263,19 +247,12 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 			}
 
 			if (l.begins_with("msgstr[")) {
-				if (status != STATUS_READING_PLURAL) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected 'msgstr[]', was expecting 'msgid_plural' before 'msgstr[]' while parsing: " + path + ":" + itos(line));
-				}
+				ERR_FAIL_COND_V_MSG(status != STATUS_READING_PLURAL, Ref<Resource>(), vformat("Unexpected 'msgstr[]', was expecting 'msgid_plural' before 'msgstr[]' while parsing: %s:%d.", path, line));
 				plural_index++; // Increment to add to the next slot in vector msgs_plural.
-				l = l.substr(9, l.length()).strip_edges();
+				l = l.substr(9).strip_edges();
 			} else if (l.begins_with("msgstr")) {
-				if (status != STATUS_READING_ID) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected 'msgstr', was expecting 'msgid' before 'msgstr' while parsing: " + path + ":" + itos(line));
-				}
-
-				l = l.substr(6, l.length()).strip_edges();
+				ERR_FAIL_COND_V_MSG(status != STATUS_READING_ID, Ref<Resource>(), vformat("Unexpected 'msgstr', was expecting 'msgid' before 'msgstr' while parsing: %s:%d.", path, line));
+				l = l.substr(6).strip_edges();
 				status = STATUS_READING_STRING;
 			}
 
@@ -287,12 +264,9 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 				continue; // Nothing to read or comment.
 			}
 
-			if (!l.begins_with("\"") || status == STATUS_NONE) {
-				memdelete(f);
-				ERR_FAIL_V_MSG(RES(), "Invalid line '" + l + "' while parsing: " + path + ":" + itos(line));
-			}
+			ERR_FAIL_COND_V_MSG(!l.begins_with("\"") || status == STATUS_NONE, Ref<Resource>(), vformat("Invalid line '%s' while parsing: %s:%d.", l, path, line));
 
-			l = l.substr(1, l.length());
+			l = l.substr(1);
 			// Find final quote, ignoring escaped ones (\").
 			// The escape_next logic is necessary to properly parse things like \\"
 			// where the backslash is the one being escaped, not the quote.
@@ -312,10 +286,7 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 				escape_next = false;
 			}
 
-			if (end_pos == -1) {
-				memdelete(f);
-				ERR_FAIL_V_MSG(RES(), "Expected '\"' at end of message while parsing: " + path + ":" + itos(line));
-			}
+			ERR_FAIL_COND_V_MSG(end_pos == -1, Ref<Resource>(), vformat("Expected '\"' at end of message while parsing: %s:%d.", path, line));
 
 			l = l.substr(0, end_pos);
 			l = l.c_unescape();
@@ -327,17 +298,12 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 			} else if (status == STATUS_READING_CONTEXT) {
 				msg_context += l;
 			} else if (status == STATUS_READING_PLURAL && plural_index >= 0) {
-				if (plural_index >= plural_forms) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Unexpected plural form while parsing: " + path + ":" + itos(line));
-				}
+				ERR_FAIL_COND_V_MSG(plural_index >= plural_forms, Ref<Resource>(), vformat("Unexpected plural form while parsing: %s:%d.", path, line));
 				msgs_plural.write[plural_index] = msgs_plural[plural_index] + l;
 			}
 
 			line++;
 		}
-
-		memdelete(f);
 
 		// Add the last set of data from last iteration.
 		if (status == STATUS_READING_STRING) {
@@ -350,26 +316,23 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 			}
 		} else if (status == STATUS_READING_PLURAL) {
 			if (!skip_this && !msg_id.is_empty()) {
-				if (plural_index != plural_forms - 1) {
-					memdelete(f);
-					ERR_FAIL_V_MSG(RES(), "Number of 'msgstr[]' doesn't match with number of plural forms: " + path + ":" + itos(line));
-				}
+				ERR_FAIL_COND_V_MSG(plural_index != plural_forms - 1, Ref<Resource>(), vformat("Number of 'msgstr[]' doesn't match with number of plural forms: %s:%d.", path, line));
 				translation->add_plural_message(msg_id, msgs_plural, msg_context);
 			}
 		}
 	}
 
-	ERR_FAIL_COND_V_MSG(config.is_empty(), RES(), "No config found in file: " + path + ".");
+	ERR_FAIL_COND_V_MSG(config.is_empty(), Ref<Resource>(), vformat("No config found in file: '%s'.", path));
 
 	Vector<String> configs = config.split("\n");
 	for (int i = 0; i < configs.size(); i++) {
 		String c = configs[i].strip_edges();
-		int p = c.find(":");
+		int p = c.find_char(':');
 		if (p == -1) {
 			continue;
 		}
 		String prop = c.substr(0, p).strip_edges();
-		String value = c.substr(p + 1, c.length()).strip_edges();
+		String value = c.substr(p + 1).strip_edges();
 
 		if (prop == "X-Language" || prop == "Language") {
 			translation->set_locale(value);
@@ -383,13 +346,13 @@ RES TranslationLoaderPO::load_translation(FileAccess *f, Error *r_error) {
 	return translation;
 }
 
-RES TranslationLoaderPO::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
+Ref<Resource> TranslationLoaderPO::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
 	if (r_error) {
 		*r_error = ERR_CANT_OPEN;
 	}
 
-	FileAccess *f = FileAccess::open(p_path, FileAccess::READ);
-	ERR_FAIL_COND_V_MSG(!f, RES(), "Cannot open file '" + p_path + "'.");
+	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
+	ERR_FAIL_COND_V_MSG(f.is_null(), Ref<Resource>(), vformat("Cannot open file '%s'.", p_path));
 
 	return load_translation(f, r_error);
 }
@@ -400,7 +363,7 @@ void TranslationLoaderPO::get_recognized_extensions(List<String> *p_extensions) 
 }
 
 bool TranslationLoaderPO::handles_type(const String &p_type) const {
-	return (p_type == "Translation");
+	return (p_type == "Translation") || (p_type == "TranslationPO");
 }
 
 String TranslationLoaderPO::get_resource_type(const String &p_path) const {

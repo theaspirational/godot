@@ -3,6 +3,8 @@
 using _BINDINGS_NAMESPACE_;
 using System;
 
+[Tool]
+[GlobalClass]
 public partial class VisualShaderNode_CLASS_ : _BASE_
 {
     public override string _GetName()
@@ -20,7 +22,7 @@ public partial class VisualShaderNode_CLASS_ : _BASE_
         return "";
     }
 
-    public override int _GetReturnIconType()
+    public override VisualShaderNode.PortType _GetReturnIconType()
     {
         return 0;
     }
@@ -35,7 +37,7 @@ public partial class VisualShaderNode_CLASS_ : _BASE_
         return "";
     }
 
-    public override int _GetInputPortType(int port)
+    public override VisualShaderNode.PortType _GetInputPortType(int port)
     {
         return 0;
     }
@@ -50,12 +52,12 @@ public partial class VisualShaderNode_CLASS_ : _BASE_
         return "result";
     }
 
-    public override int _GetOutputPortType(int port)
+    public override VisualShaderNode.PortType _GetOutputPortType(int port)
     {
         return 0;
     }
 
-    public override string _GetCode(Godot.Collections.Array inputVars, Godot.Collections.Array outputVars, Shader.Mode mode, VisualShader.Type type)
+    public override string _GetCode(Godot.Collections.Array<string> inputVars, Godot.Collections.Array<string> outputVars, Shader.Mode mode, VisualShader.Type type)
     {
         return "";
     }

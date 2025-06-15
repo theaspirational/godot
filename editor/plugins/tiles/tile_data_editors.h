@@ -1,43 +1,44 @@
-/*************************************************************************/
-/*  tile_data_editors.h                                                  */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  tile_data_editors.h                                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef TILE_DATA_EDITORS_H
-#define TILE_DATA_EDITORS_H
+#pragma once
 
 #include "tile_atlas_view.h"
 
 #include "editor/editor_properties.h"
-#include "scene/2d/tile_map.h"
 #include "scene/gui/box_container.h"
-#include "scene/gui/control.h"
-#include "scene/gui/label.h"
+
+class Label;
+class MenuButton;
+class SpinBox;
+class EditorUndoRedoManager;
 
 class TileDataEditor : public VBoxContainer {
 	GDCLASS(TileDataEditor, VBoxContainer);
@@ -50,7 +51,7 @@ private:
 protected:
 	Ref<TileSet> tile_set;
 	TileData *_get_tile_data(TileMapCell p_cell);
-	virtual void _tile_set_changed(){};
+	virtual void _tile_set_changed() {}
 
 	static void _bind_methods();
 
@@ -58,29 +59,29 @@ public:
 	void set_tile_set(Ref<TileSet> p_tile_set);
 
 	// Input to handle painting.
-	virtual Control *get_toolbar() { return nullptr; };
-	virtual void forward_draw_over_atlas(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform){};
-	virtual void forward_draw_over_alternatives(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform){};
-	virtual void forward_painting_atlas_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event){};
-	virtual void forward_painting_alternatives_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event){};
+	virtual Control *get_toolbar() { return nullptr; }
+	virtual void forward_draw_over_atlas(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) {}
+	virtual void forward_draw_over_alternatives(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) {}
+	virtual void forward_painting_atlas_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event) {}
+	virtual void forward_painting_alternatives_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event) {}
 
 	// Used to draw the tile data property value over a tile.
-	virtual void draw_over_tile(CanvasItem *p_canvas_item, Transform2D p_transform, TileMapCell p_cell, bool p_selected = false){};
+	virtual void draw_over_tile(CanvasItem *p_canvas_item, Transform2D p_transform, TileMapCell p_cell, bool p_selected = false) {}
 };
 
 class DummyObject : public Object {
 	GDCLASS(DummyObject, Object)
 private:
-	Map<String, Variant> properties;
+	HashMap<String, Variant> properties;
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 
 public:
-	bool has_dummy_property(StringName p_name);
-	void add_dummy_property(StringName p_name);
-	void remove_dummy_property(StringName p_name);
+	bool has_dummy_property(const StringName &p_name);
+	void add_dummy_property(const StringName &p_name);
+	void remove_dummy_property(const StringName &p_name);
 	void clear_dummy_properties();
 };
 
@@ -93,7 +94,6 @@ private:
 	bool multiple_polygon_mode = false;
 
 	bool use_undo_redo = true;
-	UndoRedo *editor_undo_redo = nullptr;
 
 	// UI
 	int hovered_polygon_index = -1;
@@ -108,18 +108,27 @@ private:
 		DRAG_TYPE_PAN,
 	};
 	DragType drag_type = DRAG_TYPE_NONE;
-	int drag_polygon_index;
-	int drag_point_index;
+	int drag_polygon_index = 0;
+	int drag_point_index = 0;
 	Vector2 drag_last_pos;
 	PackedVector2Array drag_old_polygon;
 
 	HBoxContainer *toolbar = nullptr;
 	Ref<ButtonGroup> tools_button_group;
+	Button *button_expand = nullptr;
 	Button *button_create = nullptr;
 	Button *button_edit = nullptr;
 	Button *button_delete = nullptr;
-	Button *button_pixel_snap = nullptr;
 	MenuButton *button_advanced_menu = nullptr;
+
+	enum Snap {
+		SNAP_NONE,
+		SNAP_HALF_PIXEL,
+		SNAP_GRID,
+	};
+	int current_snap_option = SNAP_HALF_PIXEL;
+	MenuButton *button_pixel_snap = nullptr;
+	SpinBox *snap_subdivision = nullptr;
 
 	Vector<Point2> in_creation_polygon;
 
@@ -128,14 +137,11 @@ private:
 	EditorZoomWidget *editor_zoom_widget = nullptr;
 	Button *button_center_view = nullptr;
 	Vector2 panning;
+	bool initializing = true;
 
-	Ref<Texture2D> background_texture;
-	Rect2 background_region;
-	Vector2 background_offset;
-	bool background_h_flip;
-	bool background_v_flip;
-	bool background_transpose;
-	Color background_modulate;
+	Ref<TileSetAtlasSource> background_atlas_source;
+	Vector2i background_atlas_coords;
+	int background_alternative_id;
 
 	Color polygon_color = Color(1.0, 0.0, 0.0);
 
@@ -153,9 +159,12 @@ private:
 	void _advanced_menu_item_pressed(int p_item_pressed);
 	void _center_view();
 	void _base_control_gui_input(Ref<InputEvent> p_event);
+	void _set_snap_option(int p_index);
+	void _store_snap_options();
+	void _toggle_expand(bool p_expand);
 
 	void _snap_to_tile_shape(Point2 &r_point, float &r_current_snapped_dist, float p_snap_dist);
-	void _snap_to_half_pixel(Point2 &r_point);
+	void _snap_point(Point2 &r_point);
 	void _grab_polygon_point(Vector2 p_pos, const Transform2D &p_polygon_xform, int &r_polygon_index, int &r_point_index);
 	void _grab_polygon_segment_point(Vector2 p_pos, const Transform2D &p_polygon_xform, int &r_polygon_index, int &r_segment_index, Vector2 &r_point);
 
@@ -167,13 +176,13 @@ public:
 	void set_use_undo_redo(bool p_use_undo_redo);
 
 	void set_tile_set(Ref<TileSet> p_tile_set);
-	void set_background(Ref<Texture2D> p_texture, Rect2 p_region = Rect2(), Vector2 p_offset = Vector2(), bool p_flip_h = false, bool p_flip_v = false, bool p_transpose = false, Color p_modulate = Color(1.0, 1.0, 1.0, 0.0));
+	void set_background_tile(const TileSetAtlasSource *p_atlas_source, const Vector2 &p_atlas_coords, int p_alternative_id);
 
 	int get_polygon_count();
-	int add_polygon(Vector<Point2> p_polygon, int p_index = -1);
+	int add_polygon(const Vector<Point2> &p_polygon, int p_index = -1);
 	void remove_polygon(int p_index);
 	void clear_polygons();
-	void set_polygon(int p_polygon_index, Vector<Point2> p_polygon);
+	void set_polygon(int p_polygon_index, const Vector<Point2> &p_polygon);
 	Vector<Point2> get_polygon(int p_polygon_index);
 
 	void set_polygons_color(Color p_color);
@@ -206,42 +215,42 @@ private:
 	DragType drag_type = DRAG_TYPE_NONE;
 	Vector2 drag_start_pos;
 	Vector2 drag_last_pos;
-	Map<TileMapCell, Variant> drag_modified;
+	HashMap<TileMapCell, Variant, TileMapCell> drag_modified;
 	Variant drag_painted_value;
 
-	void _property_value_changed(StringName p_property, Variant p_value, StringName p_field);
+	void _property_value_changed(const StringName &p_property, const Variant &p_value, const StringName &p_field);
 
 protected:
 	DummyObject *dummy_object = memnew(DummyObject);
 
-	UndoRedo *undo_redo = nullptr;
-
 	StringName type;
 	String property;
+	Variant::Type property_type;
 	void _notification(int p_what);
 
 	virtual Variant _get_painted_value();
 	virtual void _set_painted_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile);
-	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, Variant p_value);
+	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, const Variant &p_value);
 	virtual Variant _get_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile);
-	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, Map<TileMapCell, Variant> p_previous_values, Variant p_new_value);
+	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, const HashMap<TileMapCell, Variant, TileMapCell> &p_previous_values, const Variant &p_new_value);
 
 public:
-	virtual Control *get_toolbar() override { return toolbar; };
+	virtual Control *get_toolbar() override { return toolbar; }
 	virtual void forward_draw_over_atlas(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) override;
 	virtual void forward_draw_over_alternatives(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) override;
 	virtual void forward_painting_atlas_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event) override;
 	virtual void forward_painting_alternatives_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event) override;
 	virtual void draw_over_tile(CanvasItem *p_canvas_item, Transform2D p_transform, TileMapCell p_cell, bool p_selected = false) override;
 
-	void setup_property_editor(Variant::Type p_type, String p_property, String p_label = "", Variant p_default_value = Variant());
+	void setup_property_editor(Variant::Type p_type, const String &p_property, const String &p_label = "", const Variant &p_default_value = Variant());
+	Variant::Type get_property_type();
 
 	TileDataDefaultEditor();
 	~TileDataDefaultEditor();
 };
 
-class TileDataTextureOffsetEditor : public TileDataDefaultEditor {
-	GDCLASS(TileDataTextureOffsetEditor, TileDataDefaultEditor);
+class TileDataTextureOriginEditor : public TileDataDefaultEditor {
+	GDCLASS(TileDataTextureOriginEditor, TileDataDefaultEditor);
 
 public:
 	virtual void draw_over_tile(CanvasItem *p_canvas_item, Transform2D p_transform, TileMapCell p_cell, bool p_selected = false) override;
@@ -270,17 +279,15 @@ private:
 	// UI
 	GenericTilePolygonEditor *polygon_editor = nullptr;
 
-	void _polygon_changed(PackedVector2Array p_polygon);
+	void _polygon_changed(const PackedVector2Array &p_polygon);
 
 	virtual Variant _get_painted_value() override;
 	virtual void _set_painted_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, Variant p_value) override;
+	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, const Variant &p_value) override;
 	virtual Variant _get_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, Map<TileMapCell, Variant> p_previous_values, Variant p_new_value) override;
+	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, const HashMap<TileMapCell, Variant, TileMapCell> &p_previous_values, const Variant &p_new_value) override;
 
 protected:
-	UndoRedo *undo_redo = nullptr;
-
 	virtual void _tile_set_changed() override;
 
 	void _notification(int p_what);
@@ -301,21 +308,19 @@ class TileDataCollisionEditor : public TileDataDefaultEditor {
 	// UI
 	GenericTilePolygonEditor *polygon_editor = nullptr;
 	DummyObject *dummy_object = memnew(DummyObject);
-	Map<StringName, EditorProperty *> property_editors;
+	HashMap<StringName, EditorProperty *> property_editors;
 
-	void _property_value_changed(StringName p_property, Variant p_value, StringName p_field);
-	void _property_selected(StringName p_path, int p_focusable);
+	void _property_value_changed(const StringName &p_property, const Variant &p_value, const StringName &p_field);
+	void _property_selected(const StringName &p_path, int p_focusable);
 	void _polygons_changed();
 
 	virtual Variant _get_painted_value() override;
 	virtual void _set_painted_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, Variant p_value) override;
+	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, const Variant &p_value) override;
 	virtual Variant _get_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, Map<TileMapCell, Variant> p_previous_values, Variant p_new_value) override;
+	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, const HashMap<TileMapCell, Variant, TileMapCell> &p_previous_values, const Variant &p_new_value) override;
 
 protected:
-	UndoRedo *undo_redo = nullptr;
-
 	virtual void _tile_set_changed() override;
 
 	void _notification(int p_what);
@@ -348,7 +353,7 @@ private:
 	DragType drag_type = DRAG_TYPE_NONE;
 	Vector2 drag_start_pos;
 	Vector2 drag_last_pos;
-	Map<TileMapCell, Variant> drag_modified;
+	HashMap<TileMapCell, Variant, TileMapCell> drag_modified;
 	Variant drag_painted_value;
 
 	// UI
@@ -357,7 +362,7 @@ private:
 	EditorPropertyEnum *terrain_set_property_editor = nullptr;
 	EditorPropertyEnum *terrain_property_editor = nullptr;
 
-	void _property_value_changed(StringName p_property, Variant p_value, StringName p_field);
+	void _property_value_changed(const StringName &p_property, const Variant &p_value, const StringName &p_field);
 
 	void _update_terrain_selector();
 
@@ -366,10 +371,8 @@ protected:
 
 	void _notification(int p_what);
 
-	UndoRedo *undo_redo = nullptr;
-
 public:
-	virtual Control *get_toolbar() override { return toolbar; };
+	virtual Control *get_toolbar() override { return toolbar; }
 	virtual void forward_draw_over_atlas(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) override;
 	virtual void forward_draw_over_alternatives(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, CanvasItem *p_canvas_item, Transform2D p_transform) override;
 	virtual void forward_painting_atlas_gui_input(TileAtlasView *p_tile_atlas_view, TileSetAtlasSource *p_tile_atlas_source, const Ref<InputEvent> &p_event) override;
@@ -390,17 +393,15 @@ private:
 	// UI
 	GenericTilePolygonEditor *polygon_editor = nullptr;
 
-	void _polygon_changed(PackedVector2Array p_polygon);
+	void _polygon_changed(const PackedVector2Array &p_polygon);
 
 	virtual Variant _get_painted_value() override;
 	virtual void _set_painted_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, Variant p_value) override;
+	virtual void _set_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile, const Variant &p_value) override;
 	virtual Variant _get_value(TileSetAtlasSource *p_tile_set_atlas_source, Vector2 p_coords, int p_alternative_tile) override;
-	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, Map<TileMapCell, Variant> p_previous_values, Variant p_new_value) override;
+	virtual void _setup_undo_redo_action(TileSetAtlasSource *p_tile_set_atlas_source, const HashMap<TileMapCell, Variant, TileMapCell> &p_previous_values, const Variant &p_new_value) override;
 
 protected:
-	UndoRedo *undo_redo = nullptr;
-
 	virtual void _tile_set_changed() override;
 
 	void _notification(int p_what);
@@ -412,5 +413,3 @@ public:
 
 	TileDataNavigationEditor();
 };
-
-#endif // TILE_DATA_EDITORS_H

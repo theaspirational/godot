@@ -1,17 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="VideoStreamPlayer" inherits="Control" version="4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+<class name="VideoStreamPlayer" inherits="Control" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
-		Control for playing video streams.
+		A control used for video playback.
 	</brief_description>
 	<description>
-		Control node for playing video streams using [VideoStream] resources.
+		A control used for playback of [VideoStream] resources.
 		Supported video formats are [url=https://www.theora.org/]Ogg Theora[/url] ([code].ogv[/code], [VideoStreamTheora]) and any format exposed via a GDExtension plugin.
-		[b]Note:[/b] Due to a bug, VideoStreamPlayer does not support localization remapping yet.
-		[b]Warning:[/b] On HTML5, video playback [i]will[/i] perform poorly due to missing architecture-specific assembly optimizations.
+		[b]Warning:[/b] On Web, video playback [i]will[/i] perform poorly due to missing architecture-specific assembly optimizations.
 	</description>
 	<tutorials>
+		<link title="Playing videos">$DOCS_URL/tutorials/animation/playing_videos.html</link>
 	</tutorials>
 	<methods>
+		<method name="get_stream_length" qualifiers="const">
+			<return type="float" />
+			<description>
+				The length of the current stream, in seconds.
+			</description>
+		</method>
 		<method name="get_stream_name" qualifiers="const">
 			<return type="String" />
 			<description>
@@ -58,18 +64,23 @@
 		<member name="bus" type="StringName" setter="set_bus" getter="get_bus" default="&amp;&quot;Master&quot;">
 			Audio bus to use for sound playback.
 		</member>
-		<member name="expand" type="bool" setter="set_expand" getter="has_expand" default="true">
+		<member name="expand" type="bool" setter="set_expand" getter="has_expand" default="false">
 			If [code]true[/code], the video scales to the control size. Otherwise, the control minimum size will be automatically adjusted to match the video stream's dimensions.
+		</member>
+		<member name="loop" type="bool" setter="set_loop" getter="has_loop" default="false">
+			If [code]true[/code], the video restarts when it reaches its end.
 		</member>
 		<member name="paused" type="bool" setter="set_paused" getter="is_paused" default="false">
 			If [code]true[/code], the video is paused.
+		</member>
+		<member name="speed_scale" type="float" setter="set_speed_scale" getter="get_speed_scale" default="1.0">
+			The stream's current speed scale. [code]1.0[/code] is the normal speed, while [code]2.0[/code] is double speed and [code]0.5[/code] is half speed. A speed scale of [code]0.0[/code] pauses the video, similar to setting [member paused] to [code]true[/code].
 		</member>
 		<member name="stream" type="VideoStream" setter="set_stream" getter="get_stream">
 			The assigned video stream. See description for supported formats.
 		</member>
 		<member name="stream_position" type="float" setter="set_stream_position" getter="get_stream_position">
 			The current position of the stream, in seconds.
-			[b]Note:[/b] Changing this value won't have any effect as seeking is not implemented yet, except in video formats implemented by a GDExtension add-on.
 		</member>
 		<member name="volume" type="float" setter="set_volume" getter="get_volume">
 			Audio volume as a linear value.

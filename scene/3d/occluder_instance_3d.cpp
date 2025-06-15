@@ -1,42 +1,42 @@
-/*************************************************************************/
-/*  occluder_instance_3d.cpp                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  occluder_instance_3d.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "occluder_instance_3d.h"
 
 #include "core/config/project_settings.h"
-#include "core/core_string_names.h"
+#include "core/io/marshalls.h"
 #include "core/math/geometry_2d.h"
 #include "core/math/triangulate.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
-#include "scene/resources/importer_mesh.h"
+#include "scene/resources/3d/importer_mesh.h"
 #include "scene/resources/surface_tool.h"
 
 #ifdef TOOLS_ENABLED
@@ -129,15 +129,13 @@ void Occluder3D::_notification(int p_what) {
 	}
 }
 
-void Occluder3D::_bind_methods() {
-}
-
 Occluder3D::Occluder3D() {
 	occluder = RS::get_singleton()->occluder_create();
 }
 
 Occluder3D::~Occluder3D() {
 	if (occluder.is_valid()) {
+		ERR_FAIL_NULL(RenderingServer::get_singleton());
 		RS::get_singleton()->free(occluder);
 	}
 }
@@ -186,21 +184,21 @@ ArrayOccluder3D::~ArrayOccluder3D() {
 
 /////////////////////////////////////////////////
 
-void QuadOccluder3D::set_size(const Vector2 &p_size) {
+void QuadOccluder3D::set_size(const Size2 &p_size) {
 	if (size == p_size) {
 		return;
 	}
 
-	size = p_size.max(Vector2());
+	size = p_size.maxf(0);
 	_update();
 }
 
-Vector2 QuadOccluder3D::get_size() const {
+Size2 QuadOccluder3D::get_size() const {
 	return size;
 }
 
 void QuadOccluder3D::_update_arrays(PackedVector3Array &r_vertices, PackedInt32Array &r_indices) {
-	Vector2 _size = Vector2(size.x / 2.0f, size.y / 2.0f);
+	Size2 _size = Size2(size.x / 2.0f, size.y / 2.0f);
 
 	r_vertices = {
 		Vector3(-_size.x, -_size.y, 0),
@@ -219,7 +217,7 @@ void QuadOccluder3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_size", "size"), &QuadOccluder3D::set_size);
 	ClassDB::bind_method(D_METHOD("get_size"), &QuadOccluder3D::get_size);
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "size"), "set_size", "get_size");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "size", PROPERTY_HINT_NONE, "suffix:m"), "set_size", "get_size");
 }
 
 QuadOccluder3D::QuadOccluder3D() {
@@ -235,7 +233,7 @@ void BoxOccluder3D::set_size(const Vector3 &p_size) {
 		return;
 	}
 
-	size = Vector3(MAX(p_size.x, 0.0f), MAX(p_size.y, 0.0f), MAX(p_size.z, 0.0f));
+	size = p_size.maxf(0);
 	_update();
 }
 
@@ -285,7 +283,7 @@ void BoxOccluder3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_size", "size"), &BoxOccluder3D::set_size);
 	ClassDB::bind_method(D_METHOD("get_size"), &BoxOccluder3D::get_size);
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "size"), "set_size", "get_size");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "size", PROPERTY_HINT_NONE, "suffix:m"), "set_size", "get_size");
 }
 
 BoxOccluder3D::BoxOccluder3D() {
@@ -323,13 +321,13 @@ void SphereOccluder3D::_update_arrays(PackedVector3Array &r_vertices, PackedInt3
 	int point = 0;
 	for (int j = 0; j <= (RINGS + 1); j++) {
 		float v = j / float(RINGS + 1);
-		float w = Math::sin(Math_PI * v);
-		float y = Math::cos(Math_PI * v);
+		float w = Math::sin(Math::PI * v);
+		float y = Math::cos(Math::PI * v);
 		for (int i = 0; i <= RADIAL_SEGMENTS; i++) {
 			float u = i / float(RADIAL_SEGMENTS);
 
-			float x = Math::cos(u * Math_TAU);
-			float z = Math::sin(u * Math_TAU);
+			float x = Math::cos(u * Math::TAU);
+			float z = Math::sin(u * Math::TAU);
 			vertex_ptr[vertex_i++] = Vector3(x * w, y, z * w) * radius;
 
 			if (i > 0 && j > 0) {
@@ -354,7 +352,7 @@ void SphereOccluder3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_radius", "radius"), &SphereOccluder3D::set_radius);
 	ClassDB::bind_method(D_METHOD("get_radius"), &SphereOccluder3D::get_radius);
 
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius"), "set_radius", "get_radius");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius", PROPERTY_HINT_NONE, "suffix:m"), "set_radius", "get_radius");
 }
 
 SphereOccluder3D::SphereOccluder3D() {
@@ -439,14 +437,14 @@ void OccluderInstance3D::set_occluder(const Ref<Occluder3D> &p_occluder) {
 	}
 
 	if (occluder.is_valid()) {
-		occluder->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &OccluderInstance3D::_occluder_changed));
+		occluder->disconnect_changed(callable_mp(this, &OccluderInstance3D::_occluder_changed));
 	}
 
 	occluder = p_occluder;
 
 	if (occluder.is_valid()) {
 		set_base(occluder->get_rid());
-		occluder->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &OccluderInstance3D::_occluder_changed));
+		occluder->connect_changed(callable_mp(this, &OccluderInstance3D::_occluder_changed));
 	} else {
 		set_base(RID());
 	}
@@ -457,7 +455,7 @@ void OccluderInstance3D::set_occluder(const Ref<Occluder3D> &p_occluder) {
 #ifdef TOOLS_ENABLED
 	// PolygonOccluder3D is edited via an editor plugin, this ensures the plugin is shown/hidden when necessary
 	if (Engine::get_singleton()->is_editor_hint()) {
-		EditorNode::get_singleton()->call_deferred(SNAME("edit_current"));
+		callable_mp(EditorNode::get_singleton(), &EditorNode::edit_current).call_deferred();
 	}
 #endif
 }
@@ -523,7 +521,7 @@ void OccluderInstance3D::_bake_surface(const Transform3D &p_transform, Array p_s
 	PackedVector3Array vertices = p_surface_arrays[Mesh::ARRAY_VERTEX];
 	PackedInt32Array indices = p_surface_arrays[Mesh::ARRAY_INDEX];
 
-	if (vertices.size() == 0 || indices.size() == 0) {
+	if (vertices.is_empty() || indices.is_empty()) {
 		return;
 	}
 
@@ -533,11 +531,21 @@ void OccluderInstance3D::_bake_surface(const Transform3D &p_transform, Array p_s
 	}
 
 	if (!Math::is_zero_approx(p_simplification_dist) && SurfaceTool::simplify_func) {
-		float error_scale = SurfaceTool::simplify_scale_func((float *)vertices.ptr(), vertices.size(), sizeof(Vector3));
+		Vector<float> vertices_f32 = vector3_to_float32_array(vertices.ptr(), vertices.size());
+
+		float error_scale = SurfaceTool::simplify_scale_func(vertices_f32.ptr(), vertices.size(), sizeof(float) * 3);
 		float target_error = p_simplification_dist / error_scale;
 		float error = -1.0f;
 		int target_index_count = MIN(indices.size(), 36);
-		uint32_t index_count = SurfaceTool::simplify_func((unsigned int *)indices.ptrw(), (unsigned int *)indices.ptr(), indices.size(), (float *)vertices.ptr(), vertices.size(), sizeof(Vector3), target_index_count, target_error, &error);
+
+		const int simplify_options = SurfaceTool::SIMPLIFY_LOCK_BORDER;
+
+		uint32_t index_count = SurfaceTool::simplify_func(
+				(unsigned int *)indices.ptrw(),
+				(unsigned int *)indices.ptr(),
+				indices.size(),
+				vertices_f32.ptr(), vertices.size(), sizeof(float) * 3,
+				target_index_count, target_error, simplify_options, &error);
 		indices.resize(index_count);
 	}
 
@@ -593,7 +601,7 @@ void OccluderInstance3D::_bake_node(Node *p_node, PackedVector3Array &r_vertices
 }
 
 void OccluderInstance3D::bake_single_node(const Node3D *p_node, float p_simplification_distance, PackedVector3Array &r_vertices, PackedInt32Array &r_indices) {
-	ERR_FAIL_COND(!p_node);
+	ERR_FAIL_NULL(p_node);
 
 	Transform3D xform = p_node->is_inside_tree() ? p_node->get_global_transform() : p_node->get_transform();
 
@@ -670,7 +678,7 @@ OccluderInstance3D::BakeError OccluderInstance3D::bake_scene(Node *p_from_node, 
 
 	occ->set_arrays(vertices, indices);
 
-	Error err = ResourceSaver::save(p_occluder_path, occ);
+	Error err = ResourceSaver::save(occ, p_occluder_path);
 
 	if (err != OK) {
 		return BAKE_ERROR_CANT_SAVE;
@@ -682,10 +690,10 @@ OccluderInstance3D::BakeError OccluderInstance3D::bake_scene(Node *p_from_node, 
 	return BAKE_ERROR_OK;
 }
 
-TypedArray<String> OccluderInstance3D::get_configuration_warnings() const {
-	TypedArray<String> warnings = Node::get_configuration_warnings();
+PackedStringArray OccluderInstance3D::get_configuration_warnings() const {
+	PackedStringArray warnings = VisualInstance3D::get_configuration_warnings();
 
-	if (!bool(GLOBAL_GET("rendering/occlusion_culling/use_occlusion_culling"))) {
+	if (!bool(GLOBAL_GET_CACHED(bool, "rendering/occlusion_culling/use_occlusion_culling"))) {
 		warnings.push_back(RTR("Occlusion culling is disabled in the Project Settings, which means occlusion culling won't be performed in the root viewport.\nTo resolve this, open the Project Settings and enable Rendering > Occlusion Culling > Use Occlusion Culling."));
 	}
 
@@ -736,7 +744,7 @@ void OccluderInstance3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "occluder", PROPERTY_HINT_RESOURCE_TYPE, "Occluder3D"), "set_occluder", "get_occluder");
 	ADD_GROUP("Bake", "bake_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "bake_mask", PROPERTY_HINT_LAYERS_3D_RENDER), "set_bake_mask", "get_bake_mask");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "bake_simplification_distance", PROPERTY_HINT_RANGE, "0.0,2.0,0.01"), "set_bake_simplification_distance", "get_bake_simplification_distance");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "bake_simplification_distance", PROPERTY_HINT_RANGE, "0.0,2.0,0.01,suffix:m"), "set_bake_simplification_distance", "get_bake_simplification_distance");
 }
 
 OccluderInstance3D::OccluderInstance3D() {

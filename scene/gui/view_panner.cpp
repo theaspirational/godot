@@ -1,76 +1,87 @@
-/*************************************************************************/
-/*  view_panner.cpp                                                      */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  view_panner.cpp                                                       */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "view_panner.h"
 
 #include "core/input/input.h"
 #include "core/input/shortcut.h"
 #include "core/os/keyboard.h"
+#include "scene/main/viewport.h"
 
 bool ViewPanner::gui_input(const Ref<InputEvent> &p_event, Rect2 p_canvas_rect) {
 	Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid()) {
 		Vector2 scroll_vec = Vector2((mb->get_button_index() == MouseButton::WHEEL_RIGHT) - (mb->get_button_index() == MouseButton::WHEEL_LEFT), (mb->get_button_index() == MouseButton::WHEEL_DOWN) - (mb->get_button_index() == MouseButton::WHEEL_UP));
-		if (scroll_vec != Vector2()) {
+		// Moving the scroll wheel sends two events: one with pressed as true,
+		// and one with pressed as false. Make sure we only process one of them.
+		if (scroll_vec != Vector2() && mb->is_pressed()) {
 			if (control_scheme == SCROLL_PANS) {
 				if (mb->is_ctrl_pressed()) {
-					scroll_vec.y *= mb->get_factor();
-					callback_helper(zoom_callback, varray(scroll_vec, mb->get_position(), mb->is_alt_pressed()));
-					return true;
-				} else {
-					Vector2 panning;
-					if (mb->is_shift_pressed()) {
-						panning.x += mb->get_factor() * scroll_vec.y;
-						panning.y += mb->get_factor() * scroll_vec.x;
-					} else {
-						panning.y += mb->get_factor() * scroll_vec.y;
-						panning.x += mb->get_factor() * scroll_vec.x;
+					if (scroll_vec.y != 0) {
+						// Compute the zoom factor.
+						float zoom_factor = mb->get_factor() <= 0 ? 1.0 : mb->get_factor();
+						zoom_factor = ((scroll_zoom_factor - 1.0) * zoom_factor) + 1.0;
+						float zoom = scroll_vec.y > 0 ? 1.0 / scroll_zoom_factor : scroll_zoom_factor;
+						zoom_callback.call(zoom, mb->get_position(), p_event);
+						return true;
 					}
-					callback_helper(scroll_callback, varray(panning, mb->is_alt_pressed()));
+				} else {
+					Vector2 panning = scroll_vec * mb->get_factor();
+					if (pan_axis == PAN_AXIS_HORIZONTAL) {
+						panning = Vector2(panning.x + panning.y, 0);
+					} else if (pan_axis == PAN_AXIS_VERTICAL) {
+						panning = Vector2(0, panning.x + panning.y);
+					} else if (mb->is_shift_pressed()) {
+						panning = Vector2(panning.y, panning.x);
+					}
+					pan_callback.call(-panning * scroll_speed, p_event);
 					return true;
 				}
 			} else {
 				if (mb->is_ctrl_pressed()) {
-					Vector2 panning;
-					if (mb->is_shift_pressed()) {
-						panning.x += mb->get_factor() * scroll_vec.y;
-						panning.y += mb->get_factor() * scroll_vec.x;
-					} else {
-						panning.y += mb->get_factor() * scroll_vec.y;
-						panning.x += mb->get_factor() * scroll_vec.x;
+					Vector2 panning = scroll_vec * mb->get_factor();
+					if (pan_axis == PAN_AXIS_HORIZONTAL) {
+						panning = Vector2(panning.x + panning.y, 0);
+					} else if (pan_axis == PAN_AXIS_VERTICAL) {
+						panning = Vector2(0, panning.x + panning.y);
+					} else if (mb->is_shift_pressed()) {
+						panning = Vector2(panning.y, panning.x);
 					}
-					callback_helper(scroll_callback, varray(panning, mb->is_alt_pressed()));
+					pan_callback.call(-panning * scroll_speed, p_event);
 					return true;
-				} else if (!mb->is_shift_pressed()) {
-					scroll_vec.y *= mb->get_factor();
-					callback_helper(zoom_callback, varray(scroll_vec, mb->get_position(), mb->is_alt_pressed()));
+				} else if (!mb->is_shift_pressed() && scroll_vec.y != 0) {
+					// Compute the zoom factor.
+					float zoom_factor = mb->get_factor() <= 0 ? 1.0 : mb->get_factor();
+					zoom_factor = ((scroll_zoom_factor - 1.0) * zoom_factor) + 1.0;
+					float zoom = scroll_vec.y > 0 ? 1.0 / scroll_zoom_factor : scroll_zoom_factor;
+					zoom_callback.call(zoom, mb->get_position(), p_event);
 					return true;
 				}
 			}
@@ -81,16 +92,26 @@ bool ViewPanner::gui_input(const Ref<InputEvent> &p_event, Rect2 p_canvas_rect) 
 			return false;
 		}
 
-		bool is_drag_event = mb->get_button_index() == MouseButton::MIDDLE ||
+		drag_type = DragType::DRAG_TYPE_NONE;
+
+		bool is_drag_zoom_event = mb->get_button_index() == MouseButton::MIDDLE && mb->is_ctrl_pressed();
+
+		if (is_drag_zoom_event) {
+			if (mb->is_pressed()) {
+				drag_type = DragType::DRAG_TYPE_ZOOM;
+				drag_zoom_position = mb->get_position();
+			}
+			return true;
+		}
+
+		bool is_drag_pan_event = mb->get_button_index() == MouseButton::MIDDLE ||
 				(enable_rmb && mb->get_button_index() == MouseButton::RIGHT) ||
 				(!simple_panning_enabled && mb->get_button_index() == MouseButton::LEFT && is_panning()) ||
 				(force_drag && mb->get_button_index() == MouseButton::LEFT);
 
-		if (is_drag_event) {
+		if (is_drag_pan_event) {
 			if (mb->is_pressed()) {
-				is_dragging = true;
-			} else {
-				is_dragging = false;
+				drag_type = DragType::DRAG_TYPE_PAN;
 			}
 			return mb->get_button_index() != MouseButton::LEFT || mb->is_pressed(); // Don't consume LMB release events (it fixes some selection problems).
 		}
@@ -98,13 +119,56 @@ bool ViewPanner::gui_input(const Ref<InputEvent> &p_event, Rect2 p_canvas_rect) 
 
 	Ref<InputEventMouseMotion> mm = p_event;
 	if (mm.is_valid()) {
-		if (is_dragging) {
-			if (p_canvas_rect != Rect2()) {
-				callback_helper(pan_callback, varray(Input::get_singleton()->warp_mouse_motion(mm, p_canvas_rect)));
+		if (drag_type == DragType::DRAG_TYPE_PAN) {
+			if (warped_panning_viewport && p_canvas_rect.has_area()) {
+				pan_callback.call(warped_panning_viewport->wrap_mouse_in_rect(mm->get_relative(), p_canvas_rect), p_event);
 			} else {
-				callback_helper(pan_callback, varray(mm->get_relative()));
+				pan_callback.call(mm->get_relative(), p_event);
 			}
 			return true;
+		} else if (drag_type == DragType::DRAG_TYPE_ZOOM) {
+			float drag_zoom_distance = 0.0;
+			if (zoom_style == ZoomStyle::ZOOM_VERTICAL) {
+				drag_zoom_distance = mm->get_relative().y;
+			} else if (zoom_style == ZoomStyle::ZOOM_HORIZONTAL) {
+				drag_zoom_distance = mm->get_relative().x * -1.0; // Needs to be flipped to match the 3D horizontal zoom style.
+			}
+			float drag_zoom_factor = 1.0 + (drag_zoom_distance * scroll_zoom_factor * drag_zoom_sensitivity_factor);
+			zoom_callback.call(drag_zoom_factor, drag_zoom_position, p_event);
+			return true;
+		}
+	}
+
+	Ref<InputEventMagnifyGesture> magnify_gesture = p_event;
+	if (magnify_gesture.is_valid()) {
+		// Zoom gesture
+		zoom_callback.call(magnify_gesture->get_factor(), magnify_gesture->get_position(), p_event);
+		return true;
+	}
+
+	Ref<InputEventPanGesture> pan_gesture = p_event;
+	if (pan_gesture.is_valid()) {
+		if (pan_gesture->is_ctrl_pressed()) {
+			// Zoom gesture.
+			float pan_zoom_factor = 1.02f;
+			float zoom_direction = pan_gesture->get_delta().x - pan_gesture->get_delta().y;
+			if (zoom_direction == 0.f) {
+				return true;
+			}
+			float zoom = zoom_direction < 0 ? 1.0 / pan_zoom_factor : pan_zoom_factor;
+			zoom_callback.call(zoom, pan_gesture->get_position(), p_event);
+			return true;
+		}
+		pan_callback.call(-pan_gesture->get_delta() * scroll_speed, p_event);
+	}
+
+	Ref<InputEventScreenDrag> screen_drag = p_event;
+	if (screen_drag.is_valid()) {
+		if (Input::get_singleton()->is_emulating_mouse_from_touch() || Input::get_singleton()->is_emulating_touch_from_mouse()) {
+			// This set of events also generates/is generated by
+			// InputEventMouseButton/InputEventMouseMotion events which will be processed instead.
+		} else {
+			pan_callback.call(screen_drag->get_relative(), p_event);
 		}
 	}
 
@@ -112,8 +176,12 @@ bool ViewPanner::gui_input(const Ref<InputEvent> &p_event, Rect2 p_canvas_rect) 
 	if (k.is_valid()) {
 		if (pan_view_shortcut.is_valid() && pan_view_shortcut->matches_event(k)) {
 			pan_key_pressed = k->is_pressed();
-			if (simple_panning_enabled || (Input::get_singleton()->get_mouse_button_mask() & MouseButton::LEFT) != MouseButton::NONE) {
-				is_dragging = pan_key_pressed;
+			if (simple_panning_enabled || Input::get_singleton()->get_mouse_button_mask().has_flag(MouseButtonMask::LEFT)) {
+				if (pan_key_pressed) {
+					drag_type = DragType::DRAG_TYPE_PAN;
+				} else if (drag_type == DragType::DRAG_TYPE_PAN) {
+					drag_type = DragType::DRAG_TYPE_NONE;
+				}
 			}
 			return true;
 		}
@@ -124,22 +192,12 @@ bool ViewPanner::gui_input(const Ref<InputEvent> &p_event, Rect2 p_canvas_rect) 
 
 void ViewPanner::release_pan_key() {
 	pan_key_pressed = false;
-	is_dragging = false;
-}
-
-void ViewPanner::callback_helper(Callable p_callback, Vector<Variant> p_args) {
-	const Variant **argptr = (const Variant **)alloca(sizeof(Variant *) * p_args.size());
-	for (int i = 0; i < p_args.size(); i++) {
-		argptr[i] = &p_args[i];
+	if (drag_type == DragType::DRAG_TYPE_PAN) {
+		drag_type = DragType::DRAG_TYPE_NONE;
 	}
-
-	Variant result;
-	Callable::CallError ce;
-	p_callback.call(argptr, p_args.size(), result, ce);
 }
 
-void ViewPanner::set_callbacks(Callable p_scroll_callback, Callable p_pan_callback, Callable p_zoom_callback) {
-	scroll_callback = p_scroll_callback;
+void ViewPanner::set_callbacks(Callable p_pan_callback, Callable p_zoom_callback) {
 	pan_callback = p_pan_callback;
 	zoom_callback = p_zoom_callback;
 }
@@ -161,14 +219,36 @@ void ViewPanner::set_simple_panning_enabled(bool p_enabled) {
 	simple_panning_enabled = p_enabled;
 }
 
+void ViewPanner::set_scroll_speed(int p_scroll_speed) {
+	ERR_FAIL_COND(p_scroll_speed <= 0);
+	scroll_speed = p_scroll_speed;
+}
+
+void ViewPanner::set_scroll_zoom_factor(float p_scroll_zoom_factor) {
+	ERR_FAIL_COND(p_scroll_zoom_factor <= 1.0);
+	scroll_zoom_factor = p_scroll_zoom_factor;
+}
+
+void ViewPanner::set_pan_axis(PanAxis p_pan_axis) {
+	pan_axis = p_pan_axis;
+}
+
+void ViewPanner::set_zoom_style(ZoomStyle p_zoom_style) {
+	zoom_style = p_zoom_style;
+}
+
 void ViewPanner::setup(ControlScheme p_scheme, Ref<Shortcut> p_shortcut, bool p_simple_panning) {
 	set_control_scheme(p_scheme);
 	set_pan_shortcut(p_shortcut);
 	set_simple_panning_enabled(p_simple_panning);
 }
 
+void ViewPanner::setup_warped_panning(Viewport *p_viewport, bool p_allowed) {
+	warped_panning_viewport = p_allowed ? p_viewport : nullptr;
+}
+
 bool ViewPanner::is_panning() const {
-	return is_dragging || pan_key_pressed;
+	return (drag_type == DragType::DRAG_TYPE_PAN) || pan_key_pressed;
 }
 
 void ViewPanner::set_force_drag(bool p_force) {
@@ -176,9 +256,7 @@ void ViewPanner::set_force_drag(bool p_force) {
 }
 
 ViewPanner::ViewPanner() {
-	Array inputs;
-	inputs.append(InputEventKey::create_reference(Key::SPACE));
-
+	Array inputs = { InputEventKey::create_reference(Key::SPACE) };
 	pan_view_shortcut.instantiate();
 	pan_view_shortcut->set_events(inputs);
 }

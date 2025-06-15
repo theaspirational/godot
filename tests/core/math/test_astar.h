@@ -1,35 +1,34 @@
-/*************************************************************************/
-/*  test_astar.h                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_astar.h                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef TEST_ASTAR_H
-#define TEST_ASTAR_H
+#pragma once
 
 #include "core/math/a_star.h"
 
@@ -58,7 +57,7 @@ public:
 	}
 
 	// Disable heuristic completely.
-	real_t _compute_cost(int p_from, int p_to) {
+	real_t _compute_cost(int64_t p_from, int64_t p_to) {
 		if (p_from == A && p_to == C) {
 			return 1000;
 		}
@@ -68,7 +67,7 @@ public:
 
 TEST_CASE("[AStar3D] ABC path") {
 	ABCX abcx;
-	Vector<int> path = abcx.get_id_path(ABCX::A, ABCX::C);
+	Vector<int64_t> path = abcx.get_id_path(ABCX::A, ABCX::C);
 	REQUIRE(path.size() == 3);
 	CHECK(path[0] == ABCX::A);
 	CHECK(path[1] == ABCX::B);
@@ -77,7 +76,7 @@ TEST_CASE("[AStar3D] ABC path") {
 
 TEST_CASE("[AStar3D] ABCX path") {
 	ABCX abcx;
-	Vector<int> path = abcx.get_id_path(ABCX::X, ABCX::C);
+	Vector<int64_t> path = abcx.get_id_path(ABCX::X, ABCX::C);
 	REQUIRE(path.size() == 4);
 	CHECK(path[0] == ABCX::X);
 	CHECK(path[1] == ABCX::A);
@@ -215,7 +214,7 @@ TEST_CASE("[AStar3D] Add/Remove") {
 
 TEST_CASE("[Stress][AStar3D] Find paths") {
 	// Random stress tests with Floyd-Warshall.
-	const int N = 30;
+	constexpr int N = 30;
 	Math::seed(0);
 
 	for (int test = 0; test < 1000; test++) {
@@ -281,7 +280,7 @@ TEST_CASE("[Stress][AStar3D] Find paths") {
 		float d[N][N];
 		for (int u = 0; u < N; u++) {
 			for (int v = 0; v < N; v++) {
-				d[u][v] = (u == v || adj[u][v]) ? p[u].distance_to(p[v]) : INFINITY;
+				d[u][v] = (u == v || adj[u][v]) ? p[u].distance_to(p[v]) : Math::INF;
 			}
 		}
 		for (int w = 0; w < N; w++) {
@@ -318,7 +317,7 @@ TEST_CASE("[Stress][AStar3D] Find paths") {
 		for (int u = 0; u < N; u++) {
 			for (int v = 0; v < N; v++) {
 				if (u != v) {
-					Vector<int> route = a.get_id_path(u, v);
+					Vector<int64_t> route = a.get_id_path(u, v);
 					if (!Math::is_inf(d[u][v])) {
 						// Reachable.
 						if (route.size() == 0) {
@@ -358,5 +357,3 @@ TEST_CASE("[Stress][AStar3D] Find paths") {
 	}
 }
 } // namespace TestAStar
-
-#endif // TEST_ASTAR_H

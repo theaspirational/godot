@@ -1,43 +1,43 @@
-/*************************************************************************/
-/*  GodotIO.java                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  GodotIO.java                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 package org.godotengine.godot;
 
+import org.godotengine.godot.error.Error;
 import org.godotengine.godot.input.GodotEditText;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.content.res.AssetManager;
-import android.graphics.Point;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -45,12 +45,17 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.Display;
 import android.view.DisplayCutout;
+import android.view.Surface;
+import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 
-import java.io.IOException;
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.util.List;
 import java.util.Locale;
 
 // Wrapper for native library
@@ -58,8 +63,8 @@ import java.util.Locale;
 public class GodotIO {
 	private static final String TAG = GodotIO.class.getSimpleName();
 
-	private final AssetManager am;
-	private final Activity activity;
+	private final Godot godot;
+
 	private final String uniqueId;
 	GodotEditText edit;
 
@@ -71,101 +76,9 @@ public class GodotIO {
 	final int SCREEN_SENSOR_PORTRAIT = 5;
 	final int SCREEN_SENSOR = 6;
 
-	/////////////////////////
-	/// DIRECTORIES
-	/////////////////////////
-
-	static class AssetDir {
-		public String[] files;
-		public int current;
-		public String path;
-	}
-
-	private int last_dir_id = 1;
-
-	private final SparseArray<AssetDir> dirs;
-
-	public int dir_open(String path) {
-		AssetDir ad = new AssetDir();
-		ad.current = 0;
-		ad.path = path;
-
-		try {
-			ad.files = am.list(path);
-			// no way to find path is directory or file exactly.
-			// but if ad.files.length==0, then it's an empty directory or file.
-			if (ad.files.length == 0) {
-				return -1;
-			}
-		} catch (IOException e) {
-			System.out.printf("Exception on dir_open: %s\n", e);
-			return -1;
-		}
-
-		++last_dir_id;
-		dirs.put(last_dir_id, ad);
-
-		return last_dir_id;
-	}
-
-	public boolean dir_is_dir(int id) {
-		if (dirs.get(id) == null) {
-			System.out.printf("dir_next: invalid dir id: %d\n", id);
-			return false;
-		}
-		AssetDir ad = dirs.get(id);
-		//System.out.printf("go next: %d,%d\n",ad.current,ad.files.length);
-		int idx = ad.current;
-		if (idx > 0)
-			idx--;
-
-		if (idx >= ad.files.length)
-			return false;
-		String fname = ad.files[idx];
-
-		try {
-			if (ad.path.equals(""))
-				am.open(fname);
-			else
-				am.open(ad.path + "/" + fname);
-			return false;
-		} catch (Exception e) {
-			return true;
-		}
-	}
-
-	public String dir_next(int id) {
-		if (dirs.get(id) == null) {
-			System.out.printf("dir_next: invalid dir id: %d\n", id);
-			return "";
-		}
-
-		AssetDir ad = dirs.get(id);
-		//System.out.printf("go next: %d,%d\n",ad.current,ad.files.length);
-
-		if (ad.current >= ad.files.length) {
-			ad.current++;
-			return "";
-		}
-		String r = ad.files[ad.current];
-		ad.current++;
-		return r;
-	}
-
-	public void dir_close(int id) {
-		if (dirs.get(id) == null) {
-			System.out.printf("dir_close: invalid dir id: %d\n", id);
-			return;
-		}
-
-		dirs.remove(id);
-	}
-
-	GodotIO(Activity p_activity) {
-		am = p_activity.getAssets();
-		activity = p_activity;
-		dirs = new SparseArray<>();
-		String androidId = Settings.Secure.getString(activity.getContentResolver(),
+	GodotIO(Godot godot) {
+		this.godot = godot;
+		String androidId = Settings.Secure.getString(godot.getContext().getContentResolver(),
 				Settings.Secure.ANDROID_ID);
 		if (androidId == null) {
 			androidId = "";
@@ -174,43 +87,78 @@ public class GodotIO {
 		uniqueId = androidId;
 	}
 
+	private Context getContext() {
+		Context context = godot.getActivity();
+		if (context == null) {
+			context = godot.getContext();
+		}
+		return context;
+	}
+
 	/////////////////////////
 	// MISCELLANEOUS OS IO
 	/////////////////////////
 
-	public int openURI(String p_uri) {
+	public int openURI(String uriString) {
 		try {
-			String path = p_uri;
-			String type = "";
-			if (path.startsWith("/")) {
-				//absolute path to filesystem, prepend file://
-				path = "file://" + path;
-				if (p_uri.endsWith(".png") || p_uri.endsWith(".jpg") || p_uri.endsWith(".gif") || p_uri.endsWith(".webp")) {
-					type = "image/*";
+			Context context = getContext();
+
+			Uri dataUri;
+			String dataType = "";
+			boolean grantReadUriPermission = false;
+
+			if (uriString.startsWith("/") || uriString.startsWith("file://")) {
+				String filePath = uriString;
+				// File uris needs to be provided via the FileProvider
+				grantReadUriPermission = true;
+				if (filePath.startsWith("file://")) {
+					filePath = filePath.replace("file://", "");
 				}
+
+				File targetFile = new File(filePath);
+				dataUri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", targetFile);
+				dataType = context.getContentResolver().getType(dataUri);
+			} else {
+				dataUri = Uri.parse(uriString);
 			}
 
 			Intent intent = new Intent();
-			intent.setAction(Intent.ACTION_VIEW);
-			if (!type.equals("")) {
-				intent.setDataAndType(Uri.parse(path), type);
+			intent.setAction(Intent.ACTION_VIEW).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			if (TextUtils.isEmpty(dataType)) {
+				intent.setData(dataUri);
 			} else {
-				intent.setData(Uri.parse(path));
+				intent.setDataAndType(dataUri, dataType);
+			}
+			if (grantReadUriPermission) {
+				intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 			}
 
-			activity.startActivity(intent);
-			return 0;
-		} catch (ActivityNotFoundException e) {
-			return 1;
+			context.startActivity(intent);
+			return Error.OK.toNativeValue();
+		} catch (Exception e) {
+			Log.e(TAG, "Unable to open uri " + uriString, e);
+			return Error.FAILED.toNativeValue();
 		}
 	}
 
 	public String getCacheDir() {
-		return activity.getCacheDir().getAbsolutePath();
+		return getContext().getCacheDir().getAbsolutePath();
+	}
+
+	public String getTempDir() {
+		File tempDir = new File(getCacheDir() + "/tmp");
+
+		if (!tempDir.exists()) {
+			if (!tempDir.mkdirs()) {
+				Log.e(TAG, "Unable to create temp dir");
+			}
+		}
+
+		return tempDir.getAbsolutePath();
 	}
 
 	public String getDataDir() {
-		return activity.getFilesDir().getAbsolutePath();
+		return getContext().getFilesDir().getAbsolutePath();
 	}
 
 	public String getLocale() {
@@ -222,50 +170,125 @@ public class GodotIO {
 	}
 
 	public int getScreenDPI() {
-		DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-		return (int)(metrics.density * 160f);
+		return getContext().getResources().getDisplayMetrics().densityDpi;
 	}
 
+	/**
+	 * Returns bucketized density values.
+	 */
 	public float getScaledDensity() {
-		return activity.getResources().getDisplayMetrics().scaledDensity;
+		int densityDpi = getContext().getResources().getDisplayMetrics().densityDpi;
+		float selectedScaledDensity;
+		if (densityDpi >= DisplayMetrics.DENSITY_XXXHIGH) {
+			selectedScaledDensity = 4.0f;
+		} else if (densityDpi >= DisplayMetrics.DENSITY_XXHIGH) {
+			selectedScaledDensity = 3.0f;
+		} else if (densityDpi >= DisplayMetrics.DENSITY_XHIGH) {
+			selectedScaledDensity = 2.0f;
+		} else if (densityDpi >= DisplayMetrics.DENSITY_HIGH) {
+			selectedScaledDensity = 1.5f;
+		} else if (densityDpi >= DisplayMetrics.DENSITY_MEDIUM) {
+			selectedScaledDensity = 1.0f;
+		} else {
+			selectedScaledDensity = 0.75f;
+		}
+		return selectedScaledDensity;
 	}
 
 	public double getScreenRefreshRate(double fallback) {
-		Display display = activity.getWindowManager().getDefaultDisplay();
+		Activity activity = godot.getActivity();
+
+		Display display = null;
+		if (activity != null) {
+			display = activity.getWindowManager().getDefaultDisplay();
+		} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			display = godot.getContext().getDisplay();
+		}
+
 		if (display != null) {
 			return display.getRefreshRate();
 		}
 		return fallback;
 	}
 
-	public int[] screenGetUsableRect() {
-		DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-		Display display = activity.getWindowManager().getDefaultDisplay();
-		Point size = new Point();
-		display.getRealSize(size);
+	public int[] getDisplaySafeArea() {
+		Rect rect = new Rect();
+		int[] result = new int[4];
 
-		int[] result = { 0, 0, size.x, size.y };
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-			WindowInsets insets = activity.getWindow().getDecorView().getRootWindowInsets();
-			DisplayCutout cutout = insets.getDisplayCutout();
-			if (cutout != null) {
-				int insetLeft = cutout.getSafeInsetLeft();
-				int insetTop = cutout.getSafeInsetTop();
-				result[0] = insetLeft;
-				result[1] = insetTop;
-				result[2] -= insetLeft + cutout.getSafeInsetRight();
-				result[3] -= insetTop + cutout.getSafeInsetBottom();
+		View topView = null;
+		if (godot.getActivity() != null) {
+			topView = godot.getActivity().getWindow().getDecorView();
+		} else if (godot.getRenderView() != null) {
+			topView = godot.getRenderView().getView();
+		}
+
+		if (topView != null) {
+			topView.getWindowVisibleDisplayFrame(rect);
+			result[0] = rect.left;
+			result[1] = rect.top;
+			result[2] = rect.right;
+			result[3] = rect.bottom;
+
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+				WindowInsets insets = topView.getRootWindowInsets();
+				DisplayCutout cutout = insets.getDisplayCutout();
+				if (cutout != null) {
+					int insetLeft = cutout.getSafeInsetLeft();
+					int insetTop = cutout.getSafeInsetTop();
+					result[0] = insetLeft;
+					result[1] = insetTop;
+					result[2] -= insetLeft + cutout.getSafeInsetRight();
+					result[3] -= insetTop + cutout.getSafeInsetBottom();
+				}
 			}
 		}
 		return result;
 	}
 
-	public void showKeyboard(String p_existing_text, boolean p_multiline, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
-		if (edit != null)
-			edit.showKeyboard(p_existing_text, p_multiline, p_max_input_length, p_cursor_start, p_cursor_end);
+	public int[] getDisplayCutouts() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+			return new int[0];
+		}
 
-		//InputMethodManager inputMgr = (InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-		//inputMgr.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+		View topView = null;
+		if (godot.getActivity() != null) {
+			topView = godot.getActivity().getWindow().getDecorView();
+		} else if (godot.getRenderView() != null) {
+			topView = godot.getRenderView().getView();
+		}
+
+		if (topView == null) {
+			return new int[0];
+		}
+		DisplayCutout cutout = topView.getRootWindowInsets().getDisplayCutout();
+		if (cutout == null) {
+			return new int[0];
+		}
+		List<Rect> rects = cutout.getBoundingRects();
+		int cutouts = rects.size();
+		int[] result = new int[cutouts * 4];
+		int index = 0;
+		for (Rect rect : rects) {
+			result[index++] = rect.left;
+			result[index++] = rect.top;
+			result[index++] = rect.width();
+			result[index++] = rect.height();
+		}
+		return result;
+	}
+
+	public boolean hasHardwareKeyboard() {
+		if (edit != null) {
+			return edit.hasHardwareKeyboard();
+		} else {
+			return false;
+		}
+	}
+
+	public void showKeyboard(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
+		if (edit != null) {
+			edit.showKeyboard(p_existing_text, GodotEditText.VirtualKeyboardType.values()[p_type], p_max_input_length, p_cursor_start, p_cursor_end);
+		}
 	}
 
 	public void hideKeyboard() {
@@ -274,6 +297,11 @@ public class GodotIO {
 	}
 
 	public void setScreenOrientation(int p_orientation) {
+		final Activity activity = godot.getActivity();
+		if (activity == null) {
+			return;
+		}
+
 		switch (p_orientation) {
 			case SCREEN_LANDSCAPE: {
 				activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
@@ -300,6 +328,11 @@ public class GodotIO {
 	}
 
 	public int getScreenOrientation() {
+		final Activity activity = godot.getActivity();
+		if (activity == null) {
+			return -1;
+		}
+
 		int orientation = activity.getRequestedOrientation();
 		switch (orientation) {
 			case ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE:
@@ -328,6 +361,29 @@ public class GodotIO {
 			default:
 				return -1;
 		}
+	}
+
+	public int getDisplayRotation() {
+		Activity activity = godot.getActivity();
+
+		Display display = null;
+		if (activity != null) {
+			display = activity.getWindowManager().getDefaultDisplay();
+		} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			display = godot.getContext().getDisplay();
+		}
+
+		if (display != null) {
+			int rotation = display.getRotation();
+			if (rotation == Surface.ROTATION_90) {
+				return 90;
+			} else if (rotation == Surface.ROTATION_180) {
+				return 180;
+			} else if (rotation == Surface.ROTATION_270) {
+				return 270;
+			}
+		}
+		return 0;
 	}
 
 	public void setEdit(GodotEditText _edit) {
@@ -390,7 +446,7 @@ public class GodotIO {
 				return Environment.getExternalStoragePublicDirectory(what).getAbsolutePath();
 			}
 		} else {
-			return activity.getExternalFilesDir(what).getAbsolutePath();
+			return getContext().getExternalFilesDir(what).getAbsolutePath();
 		}
 	}
 

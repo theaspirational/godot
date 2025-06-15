@@ -1,38 +1,38 @@
-/*************************************************************************/
-/*  editor_preview_plugins.h                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  editor_preview_plugins.h                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#ifndef EDITORPREVIEWPLUGINS_H
-#define EDITORPREVIEWPLUGINS_H
+#pragma once
 
-#include "core/templates/safe_refcount.h"
 #include "editor/editor_resource_preview.h"
+
+class ScriptLanguage;
 
 void post_process_preview(Ref<Image> p_image);
 
@@ -42,9 +42,7 @@ class EditorTexturePreviewPlugin : public EditorResourcePreviewGenerator {
 public:
 	virtual bool handles(const String &p_type) const override;
 	virtual bool generate_small_preview_automatically() const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
-
-	EditorTexturePreviewPlugin();
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorImagePreviewPlugin : public EditorResourcePreviewGenerator {
@@ -53,9 +51,7 @@ class EditorImagePreviewPlugin : public EditorResourcePreviewGenerator {
 public:
 	virtual bool handles(const String &p_type) const override;
 	virtual bool generate_small_preview_automatically() const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
-
-	EditorImagePreviewPlugin();
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorBitmapPreviewPlugin : public EditorResourcePreviewGenerator {
@@ -64,18 +60,33 @@ class EditorBitmapPreviewPlugin : public EditorResourcePreviewGenerator {
 public:
 	virtual bool handles(const String &p_type) const override;
 	virtual bool generate_small_preview_automatically() const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
-
-	EditorBitmapPreviewPlugin();
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorPackedScenePreviewPlugin : public EditorResourcePreviewGenerator {
-public:
-	virtual bool handles(const String &p_type) const;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const;
-	virtual Ref<Texture2D> generate_from_path(const String &p_path, const Size2 &p_size) const;
+	GDCLASS(EditorPackedScenePreviewPlugin, EditorResourcePreviewGenerator);
 
-	EditorPackedScenePreviewPlugin();
+	float preview_3d_fov = 30.0;
+	mutable bool aborted = false;
+	mutable DrawRequester draw_requester;
+
+protected:
+	void _setup_scene_3d(Node *p_node) const;
+	void _setup_scene_2d(Node *p_node) const;
+	void _count_node_types(Node *p_node, int &r_c2d, int &r_c3d, int &r_clight3d) const;
+	void _calculate_scene_rect(Node *p_node, Rect2 &r_rect) const;
+	void _calculate_scene_aabb(Node *p_node, AABB &r_aabb) const;
+	Transform3D _get_global_transform_3d(Node *p_n3d) const;
+	void _hide_node_2d_in_scene(Node *p_node) const;
+	void _hide_gui_in_scene(Node *p_node) const;
+	bool _setup_packed_scene(Ref<PackedScene> p_pack) const;
+	void _wait_frame() const;
+
+public:
+	virtual void abort() override;
+	virtual bool handles(const String &p_type) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual Ref<Texture2D> generate_from_path(const String &p_path, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorMaterialPreviewPlugin : public EditorResourcePreviewGenerator {
@@ -91,34 +102,36 @@ class EditorMaterialPreviewPlugin : public EditorResourcePreviewGenerator {
 	RID light2;
 	RID light_instance2;
 	RID camera;
-	Semaphore preview_done;
-
-	void _generate_frame_started();
-	void _preview_done();
+	RID camera_attributes;
+	mutable DrawRequester draw_requester;
 
 public:
 	virtual bool handles(const String &p_type) const override;
 	virtual bool generate_small_preview_automatically() const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual void abort() override;
 
 	EditorMaterialPreviewPlugin();
 	~EditorMaterialPreviewPlugin();
 };
 
 class EditorScriptPreviewPlugin : public EditorResourcePreviewGenerator {
-public:
-	virtual bool handles(const String &p_type) const;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const;
+	GDCLASS(EditorScriptPreviewPlugin, EditorResourcePreviewGenerator);
 
-	EditorScriptPreviewPlugin();
+	Ref<Texture2D> _generate_from_source_code(const ScriptLanguage *p_language, const String &p_source_code, const Size2 &p_size, Dictionary &p_metadata) const;
+
+public:
+	virtual bool handles(const String &p_type) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual Ref<Texture2D> generate_from_path(const String &p_path, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorAudioStreamPreviewPlugin : public EditorResourcePreviewGenerator {
-public:
-	virtual bool handles(const String &p_type) const;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const;
+	GDCLASS(EditorAudioStreamPreviewPlugin, EditorResourcePreviewGenerator);
 
-	EditorAudioStreamPreviewPlugin();
+public:
+	virtual bool handles(const String &p_type) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
 
 class EditorMeshPreviewPlugin : public EditorResourcePreviewGenerator {
@@ -133,14 +146,13 @@ class EditorMeshPreviewPlugin : public EditorResourcePreviewGenerator {
 	RID light2;
 	RID light_instance2;
 	RID camera;
-	Semaphore preview_done;
-
-	void _generate_frame_started();
-	void _preview_done();
+	RID camera_attributes;
+	mutable DrawRequester draw_requester;
 
 public:
 	virtual bool handles(const String &p_type) const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual void abort() override;
 
 	EditorMeshPreviewPlugin();
 	~EditorMeshPreviewPlugin();
@@ -153,33 +165,23 @@ class EditorFontPreviewPlugin : public EditorResourcePreviewGenerator {
 	RID viewport_texture;
 	RID canvas;
 	RID canvas_item;
-	Semaphore preview_done;
-
-	void _generate_frame_started();
-	void _preview_done();
+	mutable DrawRequester draw_requester;
 
 public:
 	virtual bool handles(const String &p_type) const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
-	virtual Ref<Texture2D> generate_from_path(const String &p_path, const Size2 &p_size) const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual Ref<Texture2D> generate_from_path(const String &p_path, const Size2 &p_size, Dictionary &p_metadata) const override;
+	virtual void abort() override;
 
 	EditorFontPreviewPlugin();
 	~EditorFontPreviewPlugin();
 };
 
-class EditorTileMapPatternPreviewPlugin : public EditorResourcePreviewGenerator {
-	GDCLASS(EditorTileMapPatternPreviewPlugin, EditorResourcePreviewGenerator);
-
-	Semaphore preview_done;
-
-	void _generate_frame_started();
-	void _preview_done();
+class EditorGradientPreviewPlugin : public EditorResourcePreviewGenerator {
+	GDCLASS(EditorGradientPreviewPlugin, EditorResourcePreviewGenerator);
 
 public:
 	virtual bool handles(const String &p_type) const override;
-	virtual Ref<Texture2D> generate(const RES &p_from, const Size2 &p_size) const override;
-
-	EditorTileMapPatternPreviewPlugin();
-	~EditorTileMapPatternPreviewPlugin();
+	virtual bool generate_small_preview_automatically() const override;
+	virtual Ref<Texture2D> generate(const Ref<Resource> &p_from, const Size2 &p_size, Dictionary &p_metadata) const override;
 };
-#endif // EDITORPREVIEWPLUGINS_H

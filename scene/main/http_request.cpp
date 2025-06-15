@@ -1,46 +1,43 @@
-/*************************************************************************/
-/*  http_request.cpp                                                     */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  http_request.cpp                                                      */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "http_request.h"
-#include "core/io/compression.h"
+
 #include "scene/main/timer.h"
 
-void HTTPRequest::_redirect_request(const String &p_new_url) {
-}
-
 Error HTTPRequest::_request() {
-	return client->connect_to_host(url, port, use_ssl, validate_ssl);
+	return client->connect_to_host(url, port, use_tls ? tls_options : nullptr);
 }
 
 Error HTTPRequest::_parse_url(const String &p_url) {
-	use_ssl = false;
+	use_tls = false;
 	request_string = "";
 	port = 80;
 	request_sent = false;
@@ -48,18 +45,22 @@ Error HTTPRequest::_parse_url(const String &p_url) {
 	body_len = -1;
 	body.clear();
 	downloaded.set(0);
+	final_body_size.set(0);
 	redirections = 0;
 
 	String scheme;
-	Error err = p_url.parse_url(scheme, url, port, request_string);
-	ERR_FAIL_COND_V_MSG(err != OK, err, "Error parsing URL: " + p_url + ".");
+	String fragment;
+	Error err = p_url.parse_url(scheme, url, port, request_string, fragment);
+	ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Error parsing URL: '%s'.", p_url));
+
 	if (scheme == "https://") {
-		use_ssl = true;
+		use_tls = true;
 	} else if (scheme != "http://") {
-		ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid URL scheme: " + scheme + ".");
+		ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, vformat("Invalid URL scheme: '%s'.", scheme));
 	}
+
 	if (port == 0) {
-		port = use_ssl ? 443 : 80;
+		port = use_tls ? 443 : 80;
 	}
 	if (request_string.is_empty()) {
 		request_string = "/";
@@ -86,7 +87,7 @@ String HTTPRequest::get_header_value(const PackedStringArray &p_headers, const S
 
 	String lowwer_case_header_name = p_header_name.to_lower();
 	for (int i = 0; i < p_headers.size(); i++) {
-		if (p_headers[i].find(":") > 0) {
+		if (p_headers[i].find_char(':') > 0) {
 			Vector<String> parts = p_headers[i].split(":", false, 1);
 			if (parts.size() > 1 && parts[0].strip_edges().to_lower() == lowwer_case_header_name) {
 				value = parts[1].strip_edges();
@@ -98,7 +99,7 @@ String HTTPRequest::get_header_value(const PackedStringArray &p_headers, const S
 	return value;
 }
 
-Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_headers, bool p_ssl_validate_domain, HTTPClient::Method p_method, const String &p_request_data) {
+Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_headers, HTTPClient::Method p_method, const String &p_request_data) {
 	// Copy the string into a raw buffer.
 	Vector<uint8_t> raw_data;
 
@@ -110,10 +111,10 @@ Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_h
 		memcpy(w, charstr.ptr(), len);
 	}
 
-	return request_raw(p_url, p_custom_headers, p_ssl_validate_domain, p_method, raw_data);
+	return request_raw(p_url, p_custom_headers, p_method, raw_data);
 }
 
-Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_custom_headers, bool p_ssl_validate_domain, HTTPClient::Method p_method, const Vector<uint8_t> &p_request_data_raw) {
+Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_custom_headers, HTTPClient::Method p_method, const Vector<uint8_t> &p_request_data_raw) {
 	ERR_FAIL_COND_V(!is_inside_tree(), ERR_UNCONFIGURED);
 	ERR_FAIL_COND_V_MSG(requesting, ERR_BUSY, "HTTPRequest is processing a request. Wait for completion or cancel it before attempting a new one.");
 
@@ -128,8 +129,6 @@ Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_cust
 	if (err) {
 		return err;
 	}
-
-	validate_ssl = p_ssl_validate_domain;
 
 	headers = p_custom_headers;
 
@@ -153,7 +152,7 @@ Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_cust
 		client->set_blocking_mode(false);
 		err = _request();
 		if (err != OK) {
-			call_deferred(SNAME("_request_done"), RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
+			_defer_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 			return ERR_CANT_CONNECT;
 		}
 
@@ -169,7 +168,7 @@ void HTTPRequest::_thread_func(void *p_userdata) {
 	Error err = hr->_request();
 
 	if (err != OK) {
-		hr->call_deferred(SNAME("_request_done"), RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
+		hr->_defer_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 	} else {
 		while (!hr->thread_request_quit.is_set()) {
 			bool exit = hr->_update_connection();
@@ -194,13 +193,13 @@ void HTTPRequest::cancel_request() {
 		set_process_internal(false);
 	} else {
 		thread_request_quit.set();
-		thread.wait_to_finish();
+		if (thread.is_started()) {
+			thread.wait_to_finish();
+		}
 	}
 
-	if (file) {
-		memdelete(file);
-		file = nullptr;
-	}
+	file.unref();
+	decompressor.unref();
 	client->close();
 	body.clear();
 	got_response = false;
@@ -211,7 +210,7 @@ void HTTPRequest::cancel_request() {
 
 bool HTTPRequest::_handle_response(bool *ret_value) {
 	if (!client->has_response()) {
-		call_deferred(SNAME("_request_done"), RESULT_NO_RESPONSE, 0, PackedStringArray(), PackedByteArray());
+		_defer_done(RESULT_NO_RESPONSE, 0, PackedStringArray(), PackedByteArray());
 		*ret_value = true;
 		return true;
 	}
@@ -222,6 +221,9 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 	client->get_response_headers(&rheaders);
 	response_headers.clear();
 	downloaded.set(0);
+	final_body_size.set(0);
+	decompressor.unref();
+
 	for (const String &E : rheaders) {
 		response_headers.push_back(E);
 	}
@@ -230,7 +232,7 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 		// Handle redirect.
 
 		if (max_redirects >= 0 && redirections >= max_redirects) {
-			call_deferred(SNAME("_request_done"), RESULT_REDIRECT_LIMIT_REACHED, response_code, response_headers, PackedByteArray());
+			_defer_done(RESULT_REDIRECT_LIMIT_REACHED, response_code, response_headers, PackedByteArray());
 			*ret_value = true;
 			return true;
 		}
@@ -238,8 +240,8 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 		String new_request;
 
 		for (const String &E : rheaders) {
-			if (E.findn("Location: ") != -1) {
-				new_request = E.substr(9, E.length()).strip_edges();
+			if (E.containsn("Location: ")) {
+				new_request = E.substr(9).strip_edges();
 			}
 		}
 
@@ -262,11 +264,25 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 				body_len = -1;
 				body.clear();
 				downloaded.set(0);
+				final_body_size.set(0);
 				redirections = new_redirs;
 				*ret_value = false;
 				return true;
 			}
 		}
+	}
+
+	// Check if we need to start streaming decompression.
+	String content_encoding;
+	if (accept_gzip) {
+		content_encoding = get_header_value(response_headers, "Content-Encoding").to_lower();
+	}
+	if (content_encoding == "gzip") {
+		decompressor.instantiate();
+		decompressor->start_decompression(false, get_download_chunk_size());
+	} else if (content_encoding == "deflate") {
+		decompressor.instantiate();
+		decompressor->start_decompression(true, get_download_chunk_size());
 	}
 
 	return false;
@@ -275,7 +291,7 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 bool HTTPRequest::_update_connection() {
 	switch (client->get_status()) {
 		case HTTPClient::STATUS_DISCONNECTED: {
-			call_deferred(SNAME("_request_done"), RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
+			_defer_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 			return true; // End it, since it's disconnected.
 		} break;
 		case HTTPClient::STATUS_RESOLVING: {
@@ -284,7 +300,7 @@ bool HTTPRequest::_update_connection() {
 			return false;
 		} break;
 		case HTTPClient::STATUS_CANT_RESOLVE: {
-			call_deferred(SNAME("_request_done"), RESULT_CANT_RESOLVE, 0, PackedStringArray(), PackedByteArray());
+			_defer_done(RESULT_CANT_RESOLVE, 0, PackedStringArray(), PackedByteArray());
 			return true;
 
 		} break;
@@ -294,7 +310,7 @@ bool HTTPRequest::_update_connection() {
 			return false;
 		} break; // Connecting to IP.
 		case HTTPClient::STATUS_CANT_CONNECT: {
-			call_deferred(SNAME("_request_done"), RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
+			_defer_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 			return true;
 
 		} break;
@@ -309,16 +325,16 @@ bool HTTPRequest::_update_connection() {
 						return ret_value;
 					}
 
-					call_deferred(SNAME("_request_done"), RESULT_SUCCESS, response_code, response_headers, PackedByteArray());
+					_defer_done(RESULT_SUCCESS, response_code, response_headers, PackedByteArray());
 					return true;
 				}
 				if (body_len < 0) {
 					// Chunked transfer is done.
-					call_deferred(SNAME("_request_done"), RESULT_SUCCESS, response_code, response_headers, body);
+					_defer_done(RESULT_SUCCESS, response_code, response_headers, body);
 					return true;
 				}
 
-				call_deferred(SNAME("_request_done"), RESULT_CHUNKED_BODY_SIZE_MISMATCH, response_code, response_headers, PackedByteArray());
+				_defer_done(RESULT_CHUNKED_BODY_SIZE_MISMATCH, response_code, response_headers, PackedByteArray());
 				return true;
 				// Request might have been done.
 			} else {
@@ -327,7 +343,7 @@ bool HTTPRequest::_update_connection() {
 				int size = request_data.size();
 				Error err = client->request(method, request_string, headers, size > 0 ? request_data.ptr() : nullptr, size);
 				if (err != OK) {
-					call_deferred(SNAME("_request_done"), RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray());
+					_defer_done(RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray());
 					return true;
 				}
 
@@ -350,7 +366,7 @@ bool HTTPRequest::_update_connection() {
 				}
 
 				if (!client->is_response_chunked() && client->get_response_body_length() == 0) {
-					call_deferred(SNAME("_request_done"), RESULT_SUCCESS, response_code, response_headers, PackedByteArray());
+					_defer_done(RESULT_SUCCESS, response_code, response_headers, PackedByteArray());
 					return true;
 				}
 
@@ -359,14 +375,14 @@ bool HTTPRequest::_update_connection() {
 				body_len = client->get_response_body_length();
 
 				if (body_size_limit >= 0 && body_len > body_size_limit) {
-					call_deferred(SNAME("_request_done"), RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
+					_defer_done(RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
 					return true;
 				}
 
 				if (!download_to_file.is_empty()) {
 					file = FileAccess::open(download_to_file, FileAccess::WRITE);
-					if (!file) {
-						call_deferred(SNAME("_request_done"), RESULT_DOWNLOAD_FILE_CANT_OPEN, response_code, response_headers, PackedByteArray());
+					if (file.is_null()) {
+						_defer_done(RESULT_DOWNLOAD_FILE_CANT_OPEN, response_code, response_headers, PackedByteArray());
 						return true;
 					}
 				}
@@ -377,15 +393,53 @@ bool HTTPRequest::_update_connection() {
 				return false;
 			}
 
-			PackedByteArray chunk = client->read_response_body_chunk();
+			PackedByteArray chunk;
+			if (decompressor.is_null()) {
+				// Chunk can be read directly.
+				chunk = client->read_response_body_chunk();
+				downloaded.add(chunk.size());
+			} else {
+				// Chunk is the result of decompression.
+				PackedByteArray compressed = client->read_response_body_chunk();
+				downloaded.add(compressed.size());
+
+				int pos = 0;
+				int left = compressed.size();
+				while (left) {
+					int w = 0;
+					Error err = decompressor->put_partial_data(compressed.ptr() + pos, left, w);
+					if (err == OK) {
+						PackedByteArray dc;
+						dc.resize(decompressor->get_available_bytes());
+						err = decompressor->get_data(dc.ptrw(), dc.size());
+						chunk.append_array(dc);
+					}
+					if (err != OK) {
+						_defer_done(RESULT_BODY_DECOMPRESS_FAILED, response_code, response_headers, PackedByteArray());
+						return true;
+					}
+					// We need this check here because a "zip bomb" could result in a chunk of few kilos decompressing into gigabytes of data.
+					if (body_size_limit >= 0 && final_body_size.get() + chunk.size() > body_size_limit) {
+						_defer_done(RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
+						return true;
+					}
+					pos += w;
+					left -= w;
+				}
+			}
+			final_body_size.add(chunk.size());
+
+			if (body_size_limit >= 0 && final_body_size.get() > body_size_limit) {
+				_defer_done(RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
+				return true;
+			}
 
 			if (chunk.size()) {
-				downloaded.add(chunk.size());
-				if (file) {
+				if (file.is_valid()) {
 					const uint8_t *r = chunk.ptr();
 					file->store_buffer(r, chunk.size());
 					if (file->get_error() != OK) {
-						call_deferred(SNAME("_request_done"), RESULT_DOWNLOAD_FILE_WRITE_ERROR, response_code, response_headers, PackedByteArray());
+						_defer_done(RESULT_DOWNLOAD_FILE_WRITE_ERROR, response_code, response_headers, PackedByteArray());
 						return true;
 					}
 				} else {
@@ -393,19 +447,14 @@ bool HTTPRequest::_update_connection() {
 				}
 			}
 
-			if (body_size_limit >= 0 && downloaded.get() > body_size_limit) {
-				call_deferred(SNAME("_request_done"), RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
-				return true;
-			}
-
 			if (body_len >= 0) {
 				if (downloaded.get() == body_len) {
-					call_deferred(SNAME("_request_done"), RESULT_SUCCESS, response_code, response_headers, body);
+					_defer_done(RESULT_SUCCESS, response_code, response_headers, body);
 					return true;
 				}
 			} else if (client->get_status() == HTTPClient::STATUS_DISCONNECTED) {
 				// We read till EOF, with no errors. Request is done.
-				call_deferred(SNAME("_request_done"), RESULT_SUCCESS, response_code, response_headers, body);
+				_defer_done(RESULT_SUCCESS, response_code, response_headers, body);
 				return true;
 			}
 
@@ -413,11 +462,11 @@ bool HTTPRequest::_update_connection() {
 
 		} break; // Request resulted in body: break which must be read.
 		case HTTPClient::STATUS_CONNECTION_ERROR: {
-			call_deferred(SNAME("_request_done"), RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray());
+			_defer_done(RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray());
 			return true;
 		} break;
-		case HTTPClient::STATUS_SSL_HANDSHAKE_ERROR: {
-			call_deferred(SNAME("_request_done"), RESULT_SSL_HANDSHAKE_ERROR, 0, PackedStringArray(), PackedByteArray());
+		case HTTPClient::STATUS_TLS_HANDSHAKE_ERROR: {
+			_defer_done(RESULT_TLS_HANDSHAKE_ERROR, 0, PackedStringArray(), PackedByteArray());
 			return true;
 		} break;
 	}
@@ -425,40 +474,12 @@ bool HTTPRequest::_update_connection() {
 	ERR_FAIL_V(false);
 }
 
+void HTTPRequest::_defer_done(int p_status, int p_code, const PackedStringArray &p_headers, const PackedByteArray &p_data) {
+	callable_mp(this, &HTTPRequest::_request_done).call_deferred(p_status, p_code, p_headers, p_data);
+}
+
 void HTTPRequest::_request_done(int p_status, int p_code, const PackedStringArray &p_headers, const PackedByteArray &p_data) {
 	cancel_request();
-
-	// Determine if the request body is compressed.
-	bool is_compressed;
-	String content_encoding = get_header_value(p_headers, "Content-Encoding").to_lower();
-	Compression::Mode mode;
-	if (content_encoding == "gzip") {
-		mode = Compression::Mode::MODE_GZIP;
-		is_compressed = true;
-	} else if (content_encoding == "deflate") {
-		mode = Compression::Mode::MODE_DEFLATE;
-		is_compressed = true;
-	} else {
-		is_compressed = false;
-	}
-
-	if (accept_gzip && is_compressed && p_data.size() > 0) {
-		// Decompress request body
-		PackedByteArray decompressed;
-		int result = Compression::decompress_dynamic(&decompressed, body_size_limit, p_data.ptr(), p_data.size(), mode);
-		if (result == OK) {
-			emit_signal(SNAME("request_completed"), p_status, p_code, p_headers, decompressed);
-			return;
-		} else if (result == -5) {
-			WARN_PRINT("Decompressed size of HTTP response body exceeded body_size_limit");
-			p_status = RESULT_BODY_SIZE_LIMIT_EXCEEDED;
-			// Just return the raw data if we failed to decompress it.
-		} else {
-			WARN_PRINT("Failed to decompress HTTP response body");
-			p_status = RESULT_BODY_DECOMPRESS_FAILED;
-			// Just return the raw data if we failed to decompress it.
-		}
-	}
 
 	emit_signal(SNAME("request_completed"), p_status, p_code, p_headers, p_data);
 }
@@ -485,7 +506,9 @@ void HTTPRequest::_notification(int p_what) {
 
 void HTTPRequest::set_use_threads(bool p_use) {
 	ERR_FAIL_COND(get_http_client_status() != HTTPClient::STATUS_DISCONNECTED);
+#ifdef THREADS_ENABLED
 	use_threads.set_to(p_use);
+#endif
 }
 
 bool HTTPRequest::is_using_threads() const {
@@ -569,13 +592,19 @@ double HTTPRequest::get_timeout() {
 
 void HTTPRequest::_timeout() {
 	cancel_request();
-	call_deferred(SNAME("_request_done"), RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
+	_defer_done(RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
+}
+
+void HTTPRequest::set_tls_options(const Ref<TLSOptions> &p_options) {
+	ERR_FAIL_COND(p_options.is_null() || p_options->is_server());
+	tls_options = p_options;
 }
 
 void HTTPRequest::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("request", "url", "custom_headers", "ssl_validate_domain", "method", "request_data"), &HTTPRequest::request, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(String()));
-	ClassDB::bind_method(D_METHOD("request_raw", "url", "custom_headers", "ssl_validate_domain", "method", "request_data_raw"), &HTTPRequest::request_raw, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedByteArray()));
+	ClassDB::bind_method(D_METHOD("request", "url", "custom_headers", "method", "request_data"), &HTTPRequest::request, DEFVAL(PackedStringArray()), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(String()));
+	ClassDB::bind_method(D_METHOD("request_raw", "url", "custom_headers", "method", "request_data_raw"), &HTTPRequest::request_raw, DEFVAL(PackedStringArray()), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedByteArray()));
 	ClassDB::bind_method(D_METHOD("cancel_request"), &HTTPRequest::cancel_request);
+	ClassDB::bind_method(D_METHOD("set_tls_options", "client_options"), &HTTPRequest::set_tls_options);
 
 	ClassDB::bind_method(D_METHOD("get_http_client_status"), &HTTPRequest::get_http_client_status);
 
@@ -597,9 +626,6 @@ void HTTPRequest::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_downloaded_bytes"), &HTTPRequest::get_downloaded_bytes);
 	ClassDB::bind_method(D_METHOD("get_body_size"), &HTTPRequest::get_body_size);
 
-	ClassDB::bind_method(D_METHOD("_redirect_request"), &HTTPRequest::_redirect_request);
-	ClassDB::bind_method(D_METHOD("_request_done"), &HTTPRequest::_request_done);
-
 	ClassDB::bind_method(D_METHOD("set_timeout", "timeout"), &HTTPRequest::set_timeout);
 	ClassDB::bind_method(D_METHOD("get_timeout"), &HTTPRequest::get_timeout);
 
@@ -609,13 +635,13 @@ void HTTPRequest::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_http_proxy", "host", "port"), &HTTPRequest::set_http_proxy);
 	ClassDB::bind_method(D_METHOD("set_https_proxy", "host", "port"), &HTTPRequest::set_https_proxy);
 
-	ADD_PROPERTY(PropertyInfo(Variant::STRING, "download_file", PROPERTY_HINT_FILE), "set_download_file", "get_download_file");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "download_chunk_size", PROPERTY_HINT_RANGE, "256,16777216"), "set_download_chunk_size", "get_download_chunk_size");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "download_file", PROPERTY_HINT_FILE_PATH), "set_download_file", "get_download_file");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "download_chunk_size", PROPERTY_HINT_RANGE, "256,16777216,suffix:B"), "set_download_chunk_size", "get_download_chunk_size");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_threads"), "set_use_threads", "is_using_threads");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "accept_gzip"), "set_accept_gzip", "is_accepting_gzip");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "body_size_limit", PROPERTY_HINT_RANGE, "-1,2000000000"), "set_body_size_limit", "get_body_size_limit");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "body_size_limit", PROPERTY_HINT_RANGE, "-1,2000000000,suffix:B"), "set_body_size_limit", "get_body_size_limit");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_redirects", PROPERTY_HINT_RANGE, "-1,64"), "set_max_redirects", "get_max_redirects");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "timeout", PROPERTY_HINT_RANGE, "0,3600,0.1,or_greater"), "set_timeout", "get_timeout");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "timeout", PROPERTY_HINT_RANGE, "0,3600,0.1,or_greater,suffix:s"), "set_timeout", "get_timeout");
 
 	ADD_SIGNAL(MethodInfo("request_completed", PropertyInfo(Variant::INT, "result"), PropertyInfo(Variant::INT, "response_code"), PropertyInfo(Variant::PACKED_STRING_ARRAY, "headers"), PropertyInfo(Variant::PACKED_BYTE_ARRAY, "body")));
 
@@ -624,7 +650,7 @@ void HTTPRequest::_bind_methods() {
 	BIND_ENUM_CONSTANT(RESULT_CANT_CONNECT);
 	BIND_ENUM_CONSTANT(RESULT_CANT_RESOLVE);
 	BIND_ENUM_CONSTANT(RESULT_CONNECTION_ERROR);
-	BIND_ENUM_CONSTANT(RESULT_SSL_HANDSHAKE_ERROR);
+	BIND_ENUM_CONSTANT(RESULT_TLS_HANDSHAKE_ERROR);
 	BIND_ENUM_CONSTANT(RESULT_NO_RESPONSE);
 	BIND_ENUM_CONSTANT(RESULT_BODY_SIZE_LIMIT_EXCEEDED);
 	BIND_ENUM_CONSTANT(RESULT_BODY_DECOMPRESS_FAILED);
@@ -637,14 +663,9 @@ void HTTPRequest::_bind_methods() {
 
 HTTPRequest::HTTPRequest() {
 	client = Ref<HTTPClient>(HTTPClient::create());
+	tls_options = TLSOptions::client();
 	timer = memnew(Timer);
 	timer->set_one_shot(true);
 	timer->connect("timeout", callable_mp(this, &HTTPRequest::_timeout));
 	add_child(timer);
-}
-
-HTTPRequest::~HTTPRequest() {
-	if (file) {
-		memdelete(file);
-	}
 }
