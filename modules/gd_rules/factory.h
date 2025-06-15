@@ -34,7 +34,13 @@
 #ifdef STOP
 #undef STOP
 #endif
+#ifdef GDEXTENSION
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/variant.hpp>
+using namespace godot;
+#else
 #include "core/variant/variant.h"
+#endif
 
 Variant data_object_to_variant(void *, dataObject *);
 Variant data_object_to_variant(void *, dataObject &);

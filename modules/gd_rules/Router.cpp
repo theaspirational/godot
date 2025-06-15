@@ -34,8 +34,15 @@
 #undef STOP
 #endif
 
+#ifdef GDEXTENSION
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
+using namespace godot;
+#else
 #include "core/string/print_string.h"
 #include "core/string/ustring.h"
+#endif
 
 String ROUTER::message = "";
 
@@ -62,12 +69,20 @@ int ROUTER::query_function(void *env, const char *name) {
 
 int ROUTER::print_function(void *env, const char *name, const char *m) {
 	if (strcmp(m, "\n") == 0) {
+#ifdef GDEXTENSION
+		UtilityFunctions::print(message);
+#else
 		print_line(message);
+#endif
 		message = "";
 	} else {
 		message += m;
 		if (hasEnding(m, "\n")) {
+#ifdef GDEXTENSION
+			UtilityFunctions::print(message);
+#else
 			print_line(message);
+#endif
 		}
 	};
 	return 0;

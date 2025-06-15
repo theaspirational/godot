@@ -30,8 +30,14 @@
 
 #pragma once
 
+#ifdef GDEXTENSION
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/variant/string.hpp>
+using namespace godot;
+#else
 #include "core/string/print_string.h"
 #include "core/string/ustring.h"
+#endif
 #include <string>
 
 // ROUTER class serves for printing clips messages to external shells (e.g Godot debug)

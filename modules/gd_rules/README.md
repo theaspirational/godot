@@ -15,11 +15,16 @@ platforms.
 How To Install
 --------------
 
-It is a
-[custom](https://docs.godotengine.org/en/stable/development/cpp/custom_modules_in_cpp.html)
- C++ module for Godot 4.5+. It must be
- [compiled](https://docs.godotengine.org/en/latest/development/compiling/index.html)
-into the engine to work.
+It is distributed as a
+[GDExtension](https://docs.godotengine.org/en/stable/tutorials/scripting/gdextension/what_is_gdextension.html)
+library for Godot 4.5+. Build it using the `gdextension_build` folder and
+include the generated binary in your project to use the extension.
+
+Example build command:
+
+```
+scons --directory=modules/gd_rules/gdextension_build
+```
 
 Usage
 -----

@@ -30,8 +30,15 @@
 
 #include "register_types.h"
 #include "clips_es.h"
+#ifdef GDEXTENSION
+#include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/core/memory.hpp>
+using namespace godot;
+#else
 #include "core/object/class_db.h"
 #include "modules/register_module_types.h"
+#endif
 
 void initialize_gd_rules_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
@@ -45,3 +52,21 @@ void uninitialize_gd_rules_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 }
+
+#ifdef GDEXTENSION
+
+extern "C" {
+
+GDExtensionBool GDE_EXPORT gd_rules_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
+	GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
+
+	init_obj.register_initializer(&initialize_gd_rules_module);
+	init_obj.register_terminator(&uninitialize_gd_rules_module);
+	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+
+	return init_obj.init();
+}
+
+} // extern "C"
+
+#endif // GDEXTENSION

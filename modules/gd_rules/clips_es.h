@@ -35,9 +35,18 @@
 #ifdef STOP
 #undef STOP
 #endif
+#ifdef GDEXTENSION
+#include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/variant.hpp>
+using namespace godot;
+#else
 #include "core/object/ref_counted.h"
 #include "core/string/print_string.h"
 #include "scene/main/node.h"
+#endif
 
 extern void godot_step_function(void *, DATA_OBJECT_PTR);
 extern void godot_steps_function(void *, DATA_OBJECT_PTR);

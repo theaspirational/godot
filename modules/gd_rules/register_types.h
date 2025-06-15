@@ -30,7 +30,12 @@
 
 #pragma once
 
+#ifdef GDEXTENSION
+#include <godot_cpp/core/class_db.hpp>
+using namespace godot;
+#elif defined(GODOT_MODULE)
 #include "modules/register_module_types.h"
+#endif
 
 void initialize_gd_rules_module(ModuleInitializationLevel p_level);
 void uninitialize_gd_rules_module(ModuleInitializationLevel p_level);

@@ -32,7 +32,13 @@
 #ifdef STOP
 #undef STOP
 #endif
+#ifdef GDEXTENSION
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
+using namespace godot;
+#else
 #include "core/string/print_string.h"
+#endif
 #include "factory.h"
 
 Node *ingame_singletone;
@@ -74,7 +80,11 @@ void godot_steps_function(void *env, DATA_OBJECT_PTR returnValuePtr) {
 	int argnum = EnvRtnArgCount(env);
 
 	if (!EnvArgTypeCheck(env, "..", 1, SYMBOL, returnValuePtr) && strcmp(DOPToString(returnValuePtr), "->") != 0) {
+#ifdef GDEXTENSION
+		UtilityFunctions::print("clips_es:godot_steps_function: First argument must be separator '->'");
+#else
 		print_line("clips_es:godot_steps_function: First argument must be separator '->'");
+#endif
 		SetpType(returnValuePtr, SYMBOL);
 		SetpValue(returnValuePtr, EnvFalseSymbol(env));
 		return;
@@ -116,14 +126,22 @@ void godot_dofast_function(void *env, DATA_OBJECT_PTR returnValuePtr) {
 			GetpType(returnValuePtr) == INSTANCE_ADDRESS) {
 		inst = data_object_to_variant(env, returnValuePtr);
 	} else {
+#ifdef GDEXTENSION
+		UtilityFunctions::print("clips_es:godot_dofast_function: First argument in 'now' func must be of type INSTANCE_NAME");
+#else
 		print_line("clips_es:godot_dofast_function: First argument in 'now' func must be of type INSTANCE_NAME");
+#endif
 		SetpType(returnValuePtr, SYMBOL);
 		SetpValue(returnValuePtr, EnvFalseSymbol(env));
 		return;
 	}
 
 	if (!EnvArgTypeCheck(env, "now", 2, SYMBOL, returnValuePtr)) {
+#ifdef GDEXTENSION
+		UtilityFunctions::print("clips_es:godot_retval_function: Second argument in 'now' func (gd_funcname) must be of type SYMBOL");
+#else
 		print_line("clips_es:godot_retval_function: Second argument in 'now' func (gd_funcname) must be of type SYMBOL");
+#endif
 		SetpType(returnValuePtr, SYMBOL);
 		SetpValue(returnValuePtr, EnvFalseSymbol(env));
 		return;
@@ -173,7 +191,11 @@ void godot_dopipe_function(void *env, DATA_OBJECT_PTR returnValuePtr) {
 	int argnum = EnvRtnArgCount(env);
 
 	if (!EnvArgTypeCheck(env, "..now", 1, SYMBOL, returnValuePtr) && strcmp(DOPToString(returnValuePtr), "->") != 0) {
+#ifdef GDEXTENSION
+		UtilityFunctions::print("clips_es:godot_dopipe_function: First argument in '..now' func must be separator '->'");
+#else
 		print_line("clips_es:godot_dopipe_function: First argument in '..now' func must be separator '->'");
+#endif
 		SetpType(returnValuePtr, SYMBOL);
 		SetpValue(returnValuePtr, EnvFalseSymbol(env));
 		return;

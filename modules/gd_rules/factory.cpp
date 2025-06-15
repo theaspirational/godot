@@ -34,8 +34,14 @@
 #ifdef STOP
 #undef STOP
 #endif
+#ifdef GDEXTENSION
+#include <godot_cpp/classes/object.hpp>
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
+#else
 #include "core/object/object.h"
 #include "core/string/print_string.h"
+#endif
 #include "factory.h"
 #include <memory>
 
@@ -65,8 +71,13 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 			inst_name = DOToString(clipsdo);
 			inst_id_str = inst_name.substr(inst_name.find(delimiter) + 1);
 			if (!std::stoi(inst_id_str)) {
+#ifdef GDEXTENSION
+				UtilityFunctions::print("clips_es:data_object_to_variant: Error in inst_name");
+				UtilityFunctions::print(String(inst_name.c_str()));
+#else
 				print_line("clips_es:data_object_to_variant: Error in inst_name");
 				print_line(String(inst_name.c_str()));
+#endif
 			}
 			value = ObjectDB::get_instance(ObjectID(std::stoi(inst_id_str)));
 			return value;
@@ -91,7 +102,11 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 			value = ObjectDB::get_instance(ObjectID(DOToLong(inst_id)));
 			return value;
 		case EXTERNAL_ADDRESS:
+#ifdef GDEXTENSION
+			UtilityFunctions::print("clips_es:data_object_to_variant: Detected EXTERNAL_ADDRESS");
+#else
 			print_line("clips_es:data_object_to_variant: Detected EXTERNAL_ADDRESS");
+#endif
 			value = DOToExternalAddress(clipsdo);
 			return value;
 
@@ -114,7 +129,11 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 							} else if (GetMFType(mfptr, iter + 1) == INTEGER) {
 								x = (float)int64_t(ValueToLong(GetMFValue(mfptr, iter + 1)));
 							} else {
+#ifdef GDEXTENSION
+								UtilityFunctions::print("clips_es:data_object_to_variant: Vector2 `x` must be a number");
+#else
 								print_line("clips_es:data_object_to_variant: Vector2 `x` must be a number");
+#endif
 								// throw std::runtime_error("clips_es:data_object_to_variant: Vector2 `x` must be a number");
 							}
 
@@ -123,7 +142,11 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 							} else if (GetMFType(mfptr, iter + 2) == INTEGER) {
 								y = (float)int64_t(ValueToLong(GetMFValue(mfptr, iter + 2)));
 							} else {
+#ifdef GDEXTENSION
+								UtilityFunctions::print("clips_es:data_object_to_variant: Vector2 `y` must be a number");
+#else
 								print_line("clips_es:data_object_to_variant: Vector2 `y` must be a number");
+#endif
 								// throw std::runtime_error("clips_es:data_object_to_variant: Vector2 `y` must be a number");
 							}
 
@@ -159,13 +182,21 @@ Variant data_object_to_variant(void *env, dataObject &clipsdo) {
 						values.push_back(Variant(value));
 						break;
 					default:
+#ifdef GDEXTENSION
+						UtilityFunctions::print("clips_es:data_object_to_variant: Unhandled multifield type");
+#else
 						print_line("clips_es:data_object_to_variant: Unhandled multifield type");
+#endif
 				}
 			}
 			value = values;
 			return value;
 		default:
+#ifdef GDEXTENSION
+			UtilityFunctions::print("clips_es::data_object_to_variant: Unhandled data object type");
+#else
 			print_line("clips_es::data_object_to_variant: Unhandled data object type");
+#endif
 	}
 	value = FALSE;
 	return value;
@@ -306,7 +337,11 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 						break;
 						break;
 					default:
+#ifdef GDEXTENSION
+						UtilityFunctions::print("clips_es::variant_to_data_object ARRAY: Unhandled data object type: " + values[iter].get_type_name(values[iter].get_type()));
+#else
 						print_line("clips_es::variant_to_data_object ARRAY: Unhandled data object type: " + values[iter].get_type_name(values[iter].get_type()));
+#endif
 				}
 			}
 			SetpType(clipsdo, MULTIFIELD);
@@ -315,7 +350,11 @@ variant_to_data_object(void *env, const Variant &value, dataObject *clipsdo, boo
 			SetpDOEnd(clipsdo, values.size());
 			return clipsdo;
 		default:
+#ifdef GDEXTENSION
+			UtilityFunctions::print("clips_es::variant_to_data_object: Unhandled data object type: " + value.get_type_name(value.get_type()));
+#else
 			print_line("clips_es::variant_to_data_object: Unhandled data object type: " + value.get_type_name(value.get_type()));
+#endif
 	}
 
 	SetpType(clipsdo, SYMBOL);
