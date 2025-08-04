@@ -46,7 +46,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access_pack.h"
 #include "core/os/os.h"
-#include "editor/editor_help.h"
+#include "editor/doc/editor_help.h"
 #include "editor/editor_node.h"
 
 #include "modules/gdscript/gdscript_analyzer.h"
@@ -334,7 +334,7 @@ void test_position_roundtrip(LSP::Position p_lsp, GodotPosition p_gd, const Pack
 // * Line & Char:
 //   * LSP: both 0-based
 //   * Godot: both 1-based
-TEST_SUITE("[Modules][GDScript][LSP]") {
+TEST_SUITE("[Modules][GDScript][LSP][Editor]") {
 	TEST_CASE("Can convert positions to and from Godot") {
 		String code = R"(extends Node
 
@@ -405,6 +405,7 @@ func f():
 		}
 	}
 	TEST_CASE("[workspace][resolve_symbol]") {
+		EditorFileSystem *efs = memnew(EditorFileSystem);
 		GDScriptLanguageProtocol *proto = initialize(root);
 		REQUIRE(proto);
 		Ref<GDScriptWorkspace> workspace = GDScriptLanguageProtocol::get_singleton()->get_workspace();
@@ -485,9 +486,11 @@ func f():
 		}
 
 		memdelete(proto);
+		memdelete(efs);
 		finish_language();
 	}
 	TEST_CASE("[workspace][document_symbol]") {
+		EditorFileSystem *efs = memnew(EditorFileSystem);
 		GDScriptLanguageProtocol *proto = initialize(root);
 		REQUIRE(proto);
 
@@ -524,6 +527,7 @@ func f():
 		}
 
 		memdelete(proto);
+		memdelete(efs);
 		finish_language();
 	}
 }

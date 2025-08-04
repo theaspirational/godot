@@ -535,6 +535,10 @@ Ref<Resource> Resource::duplicate_deep(ResourceDeepDuplicateMode p_deep_subresou
 	return dupe;
 }
 
+Ref<Resource> Resource::_duplicate_deep_bind(DeepDuplicateMode p_deep_subresources_mode) const {
+	return _duplicate_from_variant(true, (ResourceDeepDuplicateMode)p_deep_subresources_mode, 0);
+}
+
 Ref<Resource> Resource::_duplicate_from_variant(bool p_deep, ResourceDeepDuplicateMode p_deep_subresources_mode, int p_recursion_count) const {
 	// A call without deep duplication would have been early-rejected at Variant::duplicate() unless it's the root call.
 	DEV_ASSERT(!(p_recursion_count > 0 && p_deep_subresources_mode == RESOURCE_DEEP_DUPLICATE_NONE));
@@ -667,26 +671,26 @@ void Resource::set_as_translation_remapped(bool p_remapped) {
 	}
 }
 
-//helps keep IDs same number when loading/saving scenes. -1 clears ID and it Returns -1 when no id stored
-void Resource::set_id_for_path(const String &p_path, const String &p_id) {
+// Helps keep IDs the same when loading/saving scenes. An empty ID clears the entry, and an empty ID is returned when not found.
+void Resource::set_resource_id_for_path(const String &p_referrer_path, const String &p_resource_path, const String &p_id) {
 #ifdef TOOLS_ENABLED
 	if (p_id.is_empty()) {
 		ResourceCache::path_cache_lock.write_lock();
-		ResourceCache::resource_path_cache[p_path].erase(get_path());
+		ResourceCache::resource_path_cache[p_referrer_path].erase(p_resource_path);
 		ResourceCache::path_cache_lock.write_unlock();
 	} else {
 		ResourceCache::path_cache_lock.write_lock();
-		ResourceCache::resource_path_cache[p_path][get_path()] = p_id;
+		ResourceCache::resource_path_cache[p_referrer_path][p_resource_path] = p_id;
 		ResourceCache::path_cache_lock.write_unlock();
 	}
 #endif
 }
 
-String Resource::get_id_for_path(const String &p_path) const {
+String Resource::get_id_for_path(const String &p_referrer_path) const {
 #ifdef TOOLS_ENABLED
 	ResourceCache::path_cache_lock.read_lock();
-	if (ResourceCache::resource_path_cache[p_path].has(get_path())) {
-		String result = ResourceCache::resource_path_cache[p_path][get_path()];
+	if (ResourceCache::resource_path_cache[p_referrer_path].has(get_path())) {
+		String result = ResourceCache::resource_path_cache[p_referrer_path][get_path()];
 		ResourceCache::path_cache_lock.read_unlock();
 		return result;
 	} else {
@@ -724,12 +728,13 @@ void Resource::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("emit_changed"), &Resource::emit_changed);
 
 	ClassDB::bind_method(D_METHOD("duplicate", "deep"), &Resource::duplicate, DEFVAL(false));
-	ClassDB::bind_method(D_METHOD("duplicate_deep", "deep_subresources_mode"), &Resource::duplicate_deep, DEFVAL(RESOURCE_DEEP_DUPLICATE_INTERNAL));
+	ClassDB::bind_method(D_METHOD("duplicate_deep", "deep_subresources_mode"), &Resource::_duplicate_deep_bind, DEFVAL(RESOURCE_DEEP_DUPLICATE_INTERNAL));
 
 	// For the bindings, it's much more natural to expose this enum from the Variant realm via Resource.
-	ClassDB::bind_integer_constant(get_class_static(), StringName("ResourceDeepDuplicateMode"), "RESOURCE_DEEP_DUPLICATE_NONE", RESOURCE_DEEP_DUPLICATE_NONE);
-	ClassDB::bind_integer_constant(get_class_static(), StringName("ResourceDeepDuplicateMode"), "RESOURCE_DEEP_DUPLICATE_INTERNAL", RESOURCE_DEEP_DUPLICATE_INTERNAL);
-	ClassDB::bind_integer_constant(get_class_static(), StringName("ResourceDeepDuplicateMode"), "RESOURCE_DEEP_DUPLICATE_ALL", RESOURCE_DEEP_DUPLICATE_ALL);
+	// Therefore, we can't use BIND_ENUM_CONSTANT here because we need some customization.
+	ClassDB::bind_integer_constant(get_class_static(), StringName("DeepDuplicateMode"), "DEEP_DUPLICATE_NONE", RESOURCE_DEEP_DUPLICATE_NONE);
+	ClassDB::bind_integer_constant(get_class_static(), StringName("DeepDuplicateMode"), "DEEP_DUPLICATE_INTERNAL", RESOURCE_DEEP_DUPLICATE_INTERNAL);
+	ClassDB::bind_integer_constant(get_class_static(), StringName("DeepDuplicateMode"), "DEEP_DUPLICATE_ALL", RESOURCE_DEEP_DUPLICATE_ALL);
 
 	ADD_SIGNAL(MethodInfo("changed"));
 	ADD_SIGNAL(MethodInfo("setup_local_to_scene_requested"));

@@ -126,6 +126,7 @@ void NavMapBuilder2D::_build_step_find_edge_connection_pairs(NavMapIterationBuil
 				// Add the polygon/edge tuple to this key.
 				Connection new_connection;
 				new_connection.polygon = &region->navmesh_polygons[connectable_edge.polygon_index];
+				new_connection.edge = connectable_edge.edge;
 				new_connection.pathway_start = connectable_edge.pathway_start;
 				new_connection.pathway_end = connectable_edge.pathway_end;
 
@@ -137,7 +138,7 @@ void NavMapBuilder2D::_build_step_find_edge_connection_pairs(NavMapIterationBuil
 
 			} else {
 				// The edge is already connected with another edge, skip.
-				ERR_PRINT_ONCE("Navigation map synchronization error. Attempted to merge a navigation mesh polygon edge with another already-merged edge. This is usually caused by crossing edges, overlapping polygons, or a mismatch of the NavigationMesh / NavigationPolygon baked 'cell_size' and navigation map 'cell_size'. If you're certain none of above is the case, change 'navigation/3d/merge_rasterizer_cell_scale' to 0.001.");
+				ERR_PRINT_ONCE("Navigation map synchronization error. Attempted to merge a navigation mesh polygon edge with another already-merged edge. This is usually caused by crossing edges, overlapping polygons, or a mismatch of the NavigationMesh / NavigationPolygon baked 'cell_size' and navigation map 'cell_size'. If you're certain none of above is the case, change 'navigation/2d/merge_rasterizer_cell_scale' to 0.001.");
 			}
 		}
 	}

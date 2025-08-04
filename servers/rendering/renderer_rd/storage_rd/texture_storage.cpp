@@ -182,22 +182,11 @@ TextureStorage::TextureStorage() {
 			RD::get_singleton()->texture_update(default_rd_textures[DEFAULT_RD_TEXTURE_DEPTH], 0, sv);
 		}
 
-		for (int i = 0; i < 16; i++) {
-			pv.set(i * 4 + 0, 0);
-			pv.set(i * 4 + 1, 0);
-			pv.set(i * 4 + 2, 0);
-			pv.set(i * 4 + 3, 0);
-		}
-
+		memset(pv.ptrw(), 0, 16 * 4);
 		default_rd_textures[DEFAULT_RD_TEXTURE_MULTIMESH_BUFFER] = RD::get_singleton()->texture_buffer_create(16, RD::DATA_FORMAT_R8G8B8A8_UNORM, pv);
 
-		for (int i = 0; i < 16; i++) {
-			pv.set(i * 4 + 0, 0);
-			pv.set(i * 4 + 1, 0);
-			pv.set(i * 4 + 2, 0);
-			pv.set(i * 4 + 3, 0);
-		}
-
+		// Can be skipped, is still 0 from the previous call.
+		//memset(pv.ptrw(), 0, 16 * 4);
 		{
 			tformat.format = RD::DATA_FORMAT_R8G8B8A8_UINT;
 			Vector<Vector<uint8_t>> vpv;
@@ -3718,6 +3707,20 @@ bool TextureStorage::render_target_is_using_hdr(RID p_render_target) const {
 	ERR_FAIL_NULL_V(rt, false);
 
 	return rt->use_hdr;
+}
+
+void TextureStorage::render_target_set_use_debanding(RID p_render_target, bool p_use_debanding) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+
+	rt->use_debanding = p_use_debanding;
+}
+
+bool TextureStorage::render_target_is_using_debanding(RID p_render_target) const {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+
+	return rt->use_debanding;
 }
 
 RID TextureStorage::render_target_get_rd_framebuffer(RID p_render_target) {

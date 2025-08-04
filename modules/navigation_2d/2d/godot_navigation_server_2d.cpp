@@ -353,6 +353,20 @@ real_t GodotNavigationServer2D::map_get_cell_size(RID p_map) const {
 	return map->get_cell_size();
 }
 
+COMMAND_2(map_set_merge_rasterizer_cell_scale, RID, p_map, float, p_value) {
+	NavMap2D *map = map_owner.get_or_null(p_map);
+	ERR_FAIL_NULL(map);
+
+	map->set_merge_rasterizer_cell_scale(p_value);
+}
+
+float GodotNavigationServer2D::map_get_merge_rasterizer_cell_scale(RID p_map) const {
+	NavMap2D *map = map_owner.get_or_null(p_map);
+	ERR_FAIL_NULL_V(map, false);
+
+	return map->get_merge_rasterizer_cell_scale();
+}
+
 COMMAND_2(map_set_use_edge_connections, RID, p_map, bool, p_enabled) {
 	NavMap2D *map = map_owner.get_or_null(p_map);
 	ERR_FAIL_NULL(map);
@@ -1183,7 +1197,7 @@ COMMAND_1(free, RID, p_object) {
 		ERR_FAIL_NULL(parser);
 
 		generator_parsers.erase(parser);
-#ifndef CLIPPER2_ENABLED
+#ifdef CLIPPER2_ENABLED
 		NavMeshGenerator2D::get_singleton()->set_generator_parsers(generator_parsers);
 #endif
 		geometry_parser_owner.free(parser->self);
