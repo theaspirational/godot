@@ -1,0 +1,66 @@
+[gd_scene load_steps=5 format=2]
+
+[ext_resource path="res://game.gd" type="Script" id=1]
+[ext_resource path="res://actors/Player.tscn" type="PackedScene" id=2]
+[ext_resource path="res://actors/Enemy.tscn" type="PackedScene" id=3]
+[ext_resource path="res://fonts/dialog.tres" type="DynamicFont" id=4]
+
+[node name="Game" type="Node"]
+script = ExtResource( 1 )
+
+[node name="Enemy" parent="." instance=ExtResource( 3 )]
+position = Vector2( 67.2559, 66.3825 )
+
+[node name="Sprite" parent="Enemy" index="0"]
+position = Vector2( 1.69644, -1.43008 )
+region_rect = Rect2( 0, 0, 101, 101 )
+
+[node name="CollisionShape2D" parent="Enemy" index="1"]
+position = Vector2( 1.60225, -1.06227 )
+
+[node name="Enemy2" parent="." instance=ExtResource( 3 )]
+position = Vector2( 70.7498, 533.68 )
+
+[node name="Sprite" parent="Enemy2" index="0"]
+position = Vector2( 1.19669, 0.494174 )
+region_rect = Rect2( 0, 90, 102, 102 )
+
+[node name="Enemy3" parent="." instance=ExtResource( 3 )]
+position = Vector2( 958.178, 68.1294 )
+
+[node name="Sprite" parent="Enemy3" index="0"]
+position = Vector2( -1.37363, -0.907864 )
+region_rect = Rect2( 91, 12, 101, 98 )
+
+[node name="Enemy4" parent="." instance=ExtResource( 3 )]
+position = Vector2( 954.685, 531.933 )
+
+[node name="Sprite" parent="Enemy4" index="0"]
+position = Vector2( -0.895802, 0.590976 )
+region_rect = Rect2( 99, 95, 99, 98 )
+
+[node name="Player" parent="." instance=ExtResource( 2 )]
+position = Vector2( 516.211, 273.391 )
+
+[node name="Label" type="Label" parent="."]
+visible = false
+modulate = Color( 0, 0, 0, 1 )
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+margin_left = -316.5
+margin_top = -208.5
+margin_right = 316.5
+margin_bottom = 208.5
+custom_fonts/font = ExtResource( 4 )
+text = "GAME OVER
+Make rules!"
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[editable path="Enemy"]
+[editable path="Enemy2"]
+[editable path="Enemy3"]
+[editable path="Enemy4"]
